@@ -1,0 +1,62 @@
+int RS = 12;
+int EN = 11;
+int DB7 = 10;
+int DB6=9;
+int DB5=8;
+int DB4=7;
+
+void pulse(){
+	digitalWrite(EN,LOW);
+	delayMicroseconds(1);
+	digitalWrite(EN,HIGH);
+	delayMicroseconds(1);
+	digitalWrite(EN,LOW);
+	delayMicroseconds(100);
+}
+
+void sendNibble(int rs_value,int d7_value,int d6_value,int d5_value,int d4_value){
+	digitalWrite(RS,rs_value);
+	digitalWrite(DB7,d7_value);
+	digitalWrite(DB6,d6_value);
+	digitalWrite(DB5,d5_value);
+	digitalWrite(DB4,d4_value);
+	pulse();
+}
+
+void lc_configuration(){
+	sendNibble(0,0,0,1,0);
+
+	sendNibble(0,0,0,1,0);
+	sendNibble(0,1,0,0,0);
+
+	sendNibble(0,0,0,0,0);
+	sendNibble(0,1,1,0,0);
+
+	sendNibble(0,0,0,0,0);
+	sendNibble(0,0,1,1,0);
+
+	sendNibble(0,0,0,0,0);
+	sendNibble(0,0,0,0,1);
+}
+
+void setup(){
+	pinMode(RS,OUTPUT);
+	pinMode(EN,OUTPUT);
+	pinMode(DB7,OUTPUT);
+	pinMode(DB6,OUTPUT);
+	pinMode(DB5,OUTPUT);
+	pinMode(DB4,OUTPUT);
+
+	lc_configuration();
+}
+
+//When is RS = 0, RS = 1
+
+void loop(){
+	sendNibble(1,0,1,0,0);
+	sendNibble(1,1,0,0,0);
+
+	sendNibble(1,0,1,0,0);
+	sendNibble(1,1,0,0,1);
+
+}
