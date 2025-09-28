@@ -13,3 +13,4 @@
       await writer.write(encoder.encode(text + "\n"));
     }
 </script>
+<button onclick="connectSerial()">Connect Arduino</button>
