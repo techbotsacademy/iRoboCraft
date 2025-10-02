@@ -16,12 +16,12 @@ void loop() {
     receivedChar = Serial.read();
     Serial.println("HERE");
 
-    if (receivedChar == 'R') {   
+    if (receivedChar == 'F') {   
       // Wheel detected → Light ON
       digitalWrite(lightPin, HIGH);
       Serial.println("Light ON");
     } 
-    else if (receivedChar == 'L') {  
+    else if (receivedChar == 'B') {  
       // Mobile detected → Light OFF
       digitalWrite(lightPin, LOW);
       Serial.println("Light OFF");
