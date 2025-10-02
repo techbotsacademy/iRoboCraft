@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>RGB Color Detection</title>
+</head>
+<body>
+  <h2>Show a color to the camera</h2>
+  <video id="video" autoplay playsinline width="200" height="200"></video>
+  <p id="rgb">RGB: ...</p>
+
+  <script>
+    const video = document.getElementById("video");
+    const rgbText = document.getElementById("rgb");
+
+    // Ask for webcam access
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => { video.srcObject = stream; })
+      .catch(err => console.error("Error accessing webcam:", err));
+
+    // Create a hidden canvas to process frames
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+
+    function detectColor() {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Get pixels from center area (to avoid background noise)
+      const size = 20;
+      const x = canvas.width / 2 - size/2;
+      const y = canvas.height / 2 - size/2;
+      const imageData = ctx.getImageData(x, y, size, size).data;
+
+      let r=0, g=0, b=0, count=0;
+      for (let i=0; i<imageData.length; i+=4) {
+        r += imageData[i];
+        g += imageData[i+1];
+        b += imageData[i+2];
+        count++;
+      }
+
+      r = Math.round(r/count);
+      g = Math.round(g/count);
+      b = Math.round(b/count);
+
+      rgbText.innerText = `RGB: (${r}, ${g}, ${b})`;
+
+      requestAnimationFrame(detectColor);
+    }
+
+    video.addEventListener("playing", () => {
+      detectColor();
+    });
+  </script>
+</body>
+</html>
