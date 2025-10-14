@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>OCR with Tesseract.js</title>
+  <script>
+    let port;
+    let writer;
+    
+    async function connectSerial() {
+      port = await navigator.serial.requestPort();
+      await port.open({ baudRate: 9600 });
+      writer = port.writable.getWriter();
+    }
+    
+    async function sendToArduino(text) {
+      const encoder = new TextEncoder();
+      await writer.write(encoder.encode(text + "\n"));
+    }
+</script>
+  <button onclick="connectSerial()">Connect Arduino</button>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f3f6fa;
+      text-align: center;
+      padding: 30px;
+    }
+    #output {
+      margin-top: 20px;
+      font-size: 1.2em;
+      background: white;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.2);
+      display: inline-block;
+      min-width: 300px;
+    }
+    #preview {
+      max-width: 400px;
+      margin-top: 20px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>OCR using Tesseract.js</h2>
+  <p>Upload an image containing text — the AI will read it!</p>
+
+  <input type="file" id="imageUpload" accept="image/*">
+  <br>
+  <img id="preview" />
+  <div id="output">Recognized text will appear here...</div>
+
+  <script>
+    const imageUpload = document.getElementById('imageUpload');
+    const preview = document.getElementById('preview');
+    const output = document.getElementById('output');
+
+    function checkText(input) {
+      return input.toLowerCase().includes("danger") ? "D" : "N";
+    }
+
+    imageUpload.addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      // Show image preview
+      const reader = new FileReader();
+      reader.onload = () => {
+        preview.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+
+      output.innerText = "Reading text... please wait ⏳";
+
+      // Run OCR using Tesseract.js
+      const { data: { text } } = await Tesseract.recognize(
+        file,
+        'eng', // language
+        { logger: info => console.log(info) } // progress
+      );
+
+      output.innerHTML = `<strong>Recognized Text:</strong><br>${text}`;
+      sendToArduino(checkText(text));
+    });
+  </script>
+
+</body>
+</html>
