@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recognize Word</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    
+    <style>
+        /* General Body and Layout Styling */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color:#e6bd42; /* Light gray-blue background */
+            color: #343a40; /* Dark gray text */
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center; /* Center content horizontally */
+            min-height: 100vh;
+        }
+
+        /* Main Container for the App */
+        .container {
+            background-color: #ffffff; /* White card background */
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1); /* Soft shadow */
+            padding: 30px;
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+
+        /* Headings */
+        h2 {
+            color: #007bff; /* Primary blue color */
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        p {
+            margin-bottom: 25px;
+            color: black;
+            /* color: #6c757d; */
+             font-weight:400px;
+        }
+
+        /* Buttons */
+        button {
+            background-color: #28a745; /* Green for connect button */
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease, transform 0.1s ease;
+            margin-bottom: 20px;
+        }
+
+        button:hover {
+            background-color: #218838;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        /* File Input Styling */
+        #imageUpload {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            width: fit-content;
+            background-color: #f8f9fa;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* Image Preview */
+        #preview {
+            max-width: 100%; /* Ensure it fits in the container */
+            max-height: 300px;
+            width: auto;
+            height: auto;
+            margin-top: 20px;
+            margin-bottom: 30px;
+            border: 3px solid #007bff; /* Blue border */
+            border-radius: 8px;
+            display: none; /* Initially hidden until an image is uploaded */
+            object-fit: contain; /* Scales down to fit without cropping */
+        }
+
+        /* Output Area */
+        #output {
+            margin-top: 20px;
+            font-size: 1.1em;
+            background: #f8f9fa; /* Light background for output */
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 5px solid #ffc107; /* Yellow accent bar */
+            text-align: left;
+            white-space: pre-wrap; /* Preserves formatting */
+            word-wrap: break-word; /* Prevents overflow */
+        }
+        
+        #output strong {
+            color: #007bff; /* Blue for the strong header */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>Recognize a word</h2>
+
+        <input type="file" id="imageUpload" accept="image/*">
+        
+        <img id="preview" />
+        
+        <div id="output">Recognized text will appear here...</div>
+    </div>
+
+    <script>    
+        // OCR Logic (Mostly Unchanged)
+        const imageUpload = document.getElementById('imageUpload');
+        const preview = document.getElementById('preview');
+        const output = document.getElementById('output');
+
+        imageUpload.addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Show image preview
+            const reader = new FileReader();
+            reader.onload = () => {
+                preview.src = reader.result;
+                preview.style.display = 'block'; // Make preview visible
+            };
+            reader.readAsDataURL(file);
+
+            output.innerHTML = "<strong>Reading text... please wait ⏳</strong>";
+
+            try {
+                // Run OCR using Tesseract.js
+                const { data: { text } } = await Tesseract.recognize(
+                    file,
+                    'eng', // language
+                    { logger: info => console.log(info) } // progress
+                );
+                
+                output.innerHTML = `
+                    <strong>Recognized Text:</strong><br>${text}<br>
+                    ---<br>`;                
+
+            } catch (error) {
+                output.innerHTML = `<strong style="color: red;">OCR Failed!</strong><br>${error.message}`;
+                console.error("OCR Error:", error);
+            }
+        });
+    </script>
+
+</body>
+</html>
