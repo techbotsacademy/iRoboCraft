@@ -1,93 +1,213 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>OCR with Tesseract.js</title>
-  <script>
-    let port;
-    let writer;
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCR Text-to-Serial Sender</title>
     
-    async function connectSerial() {
-      port = await navigator.serial.requestPort();
-      await port.open({ baudRate: 9600 });
-      writer = port.writable.getWriter();
-    }
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     
-    async function sendToArduino(text) {
-      const encoder = new TextEncoder();
-      await writer.write(encoder.encode(text + "\n"));
-    }
-</script>
-  <button onclick="connectSerial()">Connect Arduino</button>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #f3f6fa;
-      text-align: center;
-      padding: 30px;
-    }
-    #output {
-      margin-top: 20px;
-      font-size: 1.2em;
-      background: white;
-      padding: 10px;
-      border-radius: 8px;
-      box-shadow: 0 0 5px rgba(0,0,0,0.2);
-      display: inline-block;
-      min-width: 300px;
-    }
-    #preview {
-      max-width: 400px;
-      margin-top: 20px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-    }
-  </style>
+    <style>
+        /* General Body and Layout Styling */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color:#e6bd42; /* Light gray-blue background */
+            color: #343a40; /* Dark gray text */
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center; /* Center content horizontally */
+            min-height: 100vh;
+        }
+
+        /* Main Container for the App */
+        .container {
+            background-color: #ffffff; /* White card background */
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1); /* Soft shadow */
+            padding: 30px;
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+
+        /* Headings */
+        h2 {
+            color: #007bff; /* Primary blue color */
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        p {
+            margin-bottom: 25px;
+            color: black;
+            /* color: #6c757d; */
+             font-weight:400px;
+        }
+
+        /* Buttons */
+        button {
+            background-color: #28a745; /* Green for connect button */
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease, transform 0.1s ease;
+            margin-bottom: 20px;
+        }
+
+        button:hover {
+            background-color: #218838;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        /* File Input Styling */
+        #imageUpload {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            width: fit-content;
+            background-color: #f8f9fa;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* Image Preview */
+        #preview {
+            max-width: 100%; /* Ensure it fits in the container */
+            max-height: 300px;
+            width: auto;
+            height: auto;
+            margin-top: 20px;
+            margin-bottom: 30px;
+            border: 3px solid #007bff; /* Blue border */
+            border-radius: 8px;
+            display: none; /* Initially hidden until an image is uploaded */
+            object-fit: contain; /* Scales down to fit without cropping */
+        }
+
+        /* Output Area */
+        #output {
+            margin-top: 20px;
+            font-size: 1.1em;
+            background: #f8f9fa; /* Light background for output */
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 5px solid #ffc107; /* Yellow accent bar */
+            text-align: left;
+            white-space: pre-wrap; /* Preserves formatting */
+            word-wrap: break-word; /* Prevents overflow */
+        }
+        
+        #output strong {
+            color: #007bff; /* Blue for the strong header */
+        }
+    </style>
 </head>
 <body>
 
-  <h2>OCR using Tesseract.js</h2>
-  <p>Upload an image containing text — the AI will read it!</p>
+    <div class="container">
+        <h2>OCR using Tesseract.js</h2>
+        <p>Upload an image containing text to read it and send a command to your Arduino.</p>
 
-  <input type="file" id="imageUpload" accept="image/*">
-  <br>
-  <img id="preview" />
-  <div id="output">Recognized text will appear here...</div>
+        <button onclick="connectSerial()">Connect Arduino</button>
 
-  <script>
-    const imageUpload = document.getElementById('imageUpload');
-    const preview = document.getElementById('preview');
-    const output = document.getElementById('output');
+        <input type="file" id="imageUpload" accept="image/*">
+        
+        <img id="preview" />
+        
+        <div id="output">Recognized text will appear here...</div>
+    </div>
 
-    function checkText(input) {
-      return input.toLowerCase().includes("danger") ? "D" : "N";
-    }
+    <script>
+        // Serial Port Variables (Unchanged)
+        let port;
+        let writer;
+        
+        // Connect Function (Unchanged)
+        async function connectSerial() {
+            try {
+                port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 9600 });
+                writer = port.writable.getWriter();
+                alert("Successfully connected to Arduino!");
+            } catch (error) {
+                console.error("Error connecting to serial port:", error);
+                alert("Connection failed. Make sure your device is plugged in and you have the latest browser.");
+            }
+        }
+        
+        // Send Function (Unchanged)
+        async function sendToArduino(text) {
+            if (!writer) {
+                console.error("Writer not initialized. Connect to Arduino first.");
+                output.innerHTML += '<br><strong style="color: red;">Error: Not connected to Arduino!</strong>';
+                return;
+            }
+            const encoder = new TextEncoder();
+            await writer.write(encoder.encode(text + "\n"));
+            console.log(`Sent: ${text}`);
+        }
 
-    imageUpload.addEventListener('change', async (event) => {
-      const file = event.target.files[0];
-      if (!file) return;
+        // OCR Logic (Mostly Unchanged)
+        const imageUpload = document.getElementById('imageUpload');
+        const preview = document.getElementById('preview');
+        const output = document.getElementById('output');
 
-      // Show image preview
-      const reader = new FileReader();
-      reader.onload = () => {
-        preview.src = reader.result;
-      };
-      reader.readAsDataURL(file);
+        // Check Text Logic (Unchanged)
+        function checkText(input) {
+            // Sends 'D' if text contains "danger" (case-insensitive), 'N' otherwise.
+            return input.toLowerCase().includes("danger") ? "D" : "N";
+        }
 
-      output.innerText = "Reading text... please wait ⏳";
+        imageUpload.addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
 
-      // Run OCR using Tesseract.js
-      const { data: { text } } = await Tesseract.recognize(
-        file,
-        'eng', // language
-        { logger: info => console.log(info) } // progress
-      );
+            // Show image preview
+            const reader = new FileReader();
+            reader.onload = () => {
+                preview.src = reader.result;
+                preview.style.display = 'block'; // Make preview visible
+            };
+            reader.readAsDataURL(file);
 
-      output.innerHTML = `<strong>Recognized Text:</strong><br>${text}`;
-      sendToArduino(checkText(text));
-    });
-  </script>
+            output.innerHTML = "<strong>Reading text... please wait ⏳</strong>";
+
+            try {
+                // Run OCR using Tesseract.js
+                const { data: { text } } = await Tesseract.recognize(
+                    file,
+                    'eng', // language
+                    { logger: info => console.log(info) } // progress
+                );
+
+                const serialCommand = checkText(text);
+                
+                output.innerHTML = `
+                    <strong>Recognized Text:</strong><br>${text}<br>
+                    ---<br>
+                    <strong>Serial Command Sent:</strong> ${serialCommand} 
+                    (${serialCommand === 'D' ? 'DANGER detected' : 'NORMAL text'})
+                `;
+                
+                // Send the determined command to Arduino
+                sendToArduino(serialCommand);
+
+            } catch (error) {
+                output.innerHTML = `<strong style="color: red;">OCR Failed!</strong><br>${error.message}`;
+                console.error("OCR Error:", error);
+            }
+        });
+    </script>
 
 </body>
 </html>
