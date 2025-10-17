@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recognize Word</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
+    <script>
+        let port;
+        let writer;
+        
+        async function connectSerial() {
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 9600 });
+    writer = port.writable.getWriter();
+    console.log("Arduino connected successfully!");
+  } catch (err) {
+    console.error("Error connecting to Arduino:", err);
+  }
+}  
+async function sendToArduino(text) {
+  if (!writer) {
+    console.warn("Arduino not connected yet! Cannot send:", text);
+    return;
+  }
+  const encoder = new TextEncoder();
+  await writer.write(encoder.encode(text + "\n"));
+  console.log("Sent to Arduino:", text);
+}
+
+    </script>
+    <button onclick="connectSerial()">Connect Arduino</button>    
+    <script type="text/javascript">
+      // More API functions here:
+      // https://github.com/googlecreativelab/teachablemachine-community/tree/master/libraries/pose
+  
+      // the link to your model provided by Teachable Machine export panel
+      const URL = "https://teachablemachine.withgoogle.com/models/aaaaaaaaa/";
+      let model, webcam, ctx, labelContainer, maxPredictions;
+  
+      async function init() {
+          const modelURL = URL + "model.json";
+          const metadataURL = URL + "metadata.json";
+  
+          // load the model and metadata
+          // Refer to tmImage.loadFromFiles() in the API to support files from a file picker
+          // Note: the pose library adds a tmPose object to your window (window.tmPose)
+          model = await tmPose.load(modelURL, metadataURL);
+          maxPredictions = model.getTotalClasses();
+  
+          // Convenience function to setup a webcam
+          const size = 200;
+          const flip = true; // whether to flip the webcam
+          webcam = new tmPose.Webcam(size, size, flip); // width, height, flip
+          await webcam.setup(); // request access to the webcam
+          await webcam.play();
+          window.requestAnimationFrame(loop);
+  
+          // append/get elements to the DOM
+          const canvas = document.getElementById("canvas");
+          canvas.width = size; canvas.height = size;
+          ctx = canvas.getContext("2d");
+          labelContainer = document.getElementById("label-container");
+          for (let i = 0; i < maxPredictions; i++) { // and class labels
+              labelContainer.appendChild(document.createElement("div"));
+          }
+      }
+  
+      async function loop(timestamp) {
+          webcam.update(); // update the webcam frame
+          await predict();
+          window.requestAnimationFrame(loop);
+      }
+  
+      async function predict() {
+          // Prediction #1: run input through posenet
+          // estimatePose can take in an image, video or canvas html element
+          const { pose, posenetOutput } = await model.estimatePose(webcam.canvas);
+          // Prediction 2: run input through teachable machine classification model
+          const prediction = await model.predict(posenetOutput);
+  
+          for (let i = 0; i < maxPredictions; i++) {
+              const classPrediction =
+                  prediction[i].className + ": " + prediction[i].probability.toFixed(2);
+              labelContainer.childNodes[i].innerHTML = classPrediction;
+          }
+  
+          // finally draw the poses
+          drawPose(pose);          
+          let highest = prediction.reduce((prev, current) =>
+            prev.probability > current.probability ? prev : current
+          );
+
+          if (highest.probability > 0.85) {
+          console.log("Prediction:", highest.className);
+  
+          if (highest.className === "Class 1") {
+            sendToArduino('S');
+          console.log("S:", highest.className);
+          } else if (highest.className === "Class 2") {
+            sendToArduino('E');
+          console.log("E:", highest.className);
+          }else if (highest.className === "Class 3") {
+            sendToArduino('N');
+          console.log("N:", highest.className);
+  
+          }
+        }
+      }
+  
+      function drawPose(pose) {
+          if (webcam.canvas) {
+              ctx.drawImage(webcam.canvas, 0, 0);
+              // draw the keypoints and skeleton
+              if (pose) {
+                  const minPartConfidence = 0.5;
+                  tmPose.drawKeypoints(pose.keypoints, minPartConfidence, ctx);
+                  tmPose.drawSkeleton(pose.keypoints, minPartConfidence, ctx);
+              }
+          }
+      }
+  </script>
+    
+    <style>
+        /* General Body and Layout Styling */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color:#e6bd42; /* Light gray-blue background */
+            color: #343a40; /* Dark gray text */
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center; /* Center content horizontally */
+            min-height: 100vh;
+        }
+
+        /* Main Container for the App */
+        .container {
+            background-color: #ffffff; /* White card background */
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1); /* Soft shadow */
+            padding: 30px;
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+
+        /* Headings */
+        h2 {
+            color: #007bff; /* Primary blue color */
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        p {
+            margin-bottom: 25px;
+            color: black;
+            /* color: #6c757d; */
+             font-weight:400px;
+        }
+
+        /* Buttons */
+        button {
+            background-color: #28a745; /* Green for connect button */
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease, transform 0.1s ease;
+            margin-bottom: 20px;
+        }
+
+        button:hover {
+            background-color: #218838;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        /* File Input Styling */
+        #imageUpload {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            width: fit-content;
+            background-color: #f8f9fa;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* Image Preview */
+        #preview {
+            max-width: 100%; /* Ensure it fits in the container */
+            max-height: 300px;
+            width: auto;
+            height: auto;
+            margin-top: 20px;
+            margin-bottom: 30px;
+            border: 3px solid #007bff; /* Blue border */
+            border-radius: 8px;
+            display: none; /* Initially hidden until an image is uploaded */
+            object-fit: contain; /* Scales down to fit without cropping */
+        }
+
+        /* Output Area */
+        #output {
+            margin-top: 20px;
+            font-size: 1.1em;
+            background: #f8f9fa; /* Light background for output */
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 5px solid #ffc107; /* Yellow accent bar */
+            text-align: left;
+            white-space: pre-wrap; /* Preserves formatting */
+            word-wrap: break-word; /* Prevents overflow */
+        }
+        
+        #output strong {
+            color: #007bff; /* Blue for the strong header */
+        }
+    </style>
+</head>
+<body>
+  <div>Teachable Machine Pose Model</div>
+  <button type="button" onclick="init()">Start</button>
+  <div><canvas id="canvas"></canvas></div>
+  <div id="label-container"></div>
+  <style>
+    /* General Body and Layout Styling */
+    body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background-color:#e6bd42; /* Light gray-blue background */
+        color: #343a40; /* Dark gray text */
+        margin: 0;
+        padding: 40px 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center; /* Center content horizontally */
+        min-height: 100vh;
+    }
+  
+    /* Main Container for the App */
+    .container {
+        background-color: #ffffff; /* White card background */
+        border-radius: 12px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1); /* Soft shadow */
+        padding: 30px;
+        max-width: 600px;
+        width: 100%;
+        text-align: center;
+    }
+  
+    /* Headings */
+    h2 {
+        color: #007bff; /* Primary blue color */
+        margin-bottom: 5px;
+        font-weight: 600;
+    }
+  
+    p {
+        margin-bottom: 25px;
+        color: black;
+        /* color: #6c757d; */
+         font-weight:400px;
+    }
+  
+    /* Buttons */
+    button {
+        background-color: #28a745; /* Green for connect button */
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 16px;
+        transition: background-color 0.3s ease, transform 0.1s ease;
+        margin-bottom: 20px;
+    }
+  
+    button:hover {
+        background-color: #218838;
+    }
+  
+    button:active {
+        transform: scale(0.98);
+    }
+  
+    /* File Input Styling */
+    #imageUpload {
+        margin-bottom: 20px;
+        padding: 10px;
+        border: 1px solid #ced4da;
+        border-radius: 6px;
+        width: fit-content;
+        background-color: #f8f9fa;
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+    }
+  
+    /* Image Preview */
+    #preview {
+        max-width: 100%; /* Ensure it fits in the container */
+        max-height: 300px;
+        width: auto;
+        height: auto;
+        margin-top: 20px;
+        margin-bottom: 30px;
+        border: 3px solid #007bff; /* Blue border */
+        border-radius: 8px;
+        display: none; /* Initially hidden until an image is uploaded */
+        object-fit: contain; /* Scales down to fit without cropping */
+    }
+  
+    /* Output Area */
+    #output {
+        margin-top: 20px;
+        font-size: 1.1em;
+        background: #f8f9fa; /* Light background for output */
+        padding: 15px;
+        border-radius: 8px;
+        border-left: 5px solid #ffc107; /* Yellow accent bar */
+        text-align: left;
+        white-space: pre-wrap; /* Preserves formatting */
+        word-wrap: break-word; /* Prevents overflow */
+    }
+    
+    #output strong {
+        color: #007bff; /* Blue for the strong header */
+    }
+  </style>  
+</body>
+
