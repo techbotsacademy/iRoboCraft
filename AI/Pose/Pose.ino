@@ -42,7 +42,7 @@ void loop() {
       digitalWrite(13, LOW);
       digitalWrite(11, LOW);
       wait=true;
-      delay(5000);
+      delay(3000);
       digitalWrite(11, HIGH);
       digitalWrite(12, LOW);
       wait=false;

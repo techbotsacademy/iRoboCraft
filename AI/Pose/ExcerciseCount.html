@@ -96,13 +96,13 @@ async function sendToArduino(text) {
           if (highest.probability > 0.85) {
           console.log("Prediction:", highest.className);
   
-          if (highest.className === "Class 1") {
+          if (highest.className === "Start") {
             sendToArduino('S');
           console.log("S:", highest.className);
-          } else if (highest.className === "Class 2") {
+          } else if (highest.className === "End") {
             sendToArduino('E');
           console.log("E:", highest.className);
-          }else if (highest.className === "Class 3") {
+          }else if (highest.className === "No Excercise") {
             sendToArduino('N');
           console.log("N:", highest.className);
   
