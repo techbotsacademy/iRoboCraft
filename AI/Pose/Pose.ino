@@ -1,7 +1,7 @@
 int count = 0;
 char lastPose = 'N';
 char currentPose = 'N';
-
+bool wait=false;
 void setup() {
   Serial.begin(9600);
   pinMode(13, OUTPUT); // Start→End LED
@@ -19,6 +19,7 @@ void loop() {
 
     // Ignore repeats
     if (incoming == lastPose) return;
+    if(wait) return;
 
     currentPose = incoming;
     // Start→End
@@ -27,6 +28,11 @@ void loop() {
       lastPose = currentPose;
       digitalWrite(12, LOW);
       digitalWrite(11, LOW);
+      wait=true;
+      delay(5000);
+      digitalWrite(11, HIGH);
+      digitalWrite(13, LOW);
+      wait=false;
 
     }
     // End→Start (counts as full repetition)
@@ -35,6 +41,11 @@ void loop() {
       lastPose = currentPose;
       digitalWrite(13, LOW);
       digitalWrite(11, LOW);
+      wait=true;
+      delay(5000);
+      digitalWrite(11, HIGH);
+      digitalWrite(12, LOW);
+      wait=false;
 
     }
     // Neutral pose
