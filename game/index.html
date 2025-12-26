@@ -44,6 +44,9 @@
 </head>
 
 <body>
+
+<button id="connectBtn">Connect to Arduino</button>
+
 <div id="gameArea">
   <div id="sprite"></div>
   <div id="ground"></div>
@@ -62,11 +65,13 @@ const debug = document.getElementById("debug");
 
 let isJumping = false;
 
+document.getElementById("connectBtn").addEventListener("click", async () => {
+  port = await navigator.serial.requestPort();
+  await port.open({ baudRate: 9600 });
+  readSerial();
+});
+
 async function readSerial() {
-  if(port==null){
-    port = await navigator.serial.requestPort();
-    await port.open({ baudRate: 9600 });
-  }
   const decoder = new TextDecoderStream();
   port.readable.pipeTo(decoder.writable);
   reader = decoder.readable.getReader();
@@ -75,11 +80,11 @@ async function readSerial() {
     const { value, done } = await reader.read();
     if (done) break;
 
-    for (const char of value) {
-      if (char === 'U' || char === 'D') {
-        handleCommand(char);
-      }
-    }
+    buffer += value;
+    let lines = buffer.split("\n");
+    buffer = lines.pop();
+
+    lines.forEach(cmd => handleCommand(cmd.trim()));
   }
 }
 
@@ -110,7 +115,6 @@ function crouch() {
   sprite.style.height = "30px"; // crouch
   sprite.style.bottom = "40px"; // stay on ground
 }
-readSerial();
 </script>
 
 </body>
