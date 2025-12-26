@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Tilt vs Keyboard Pong</title>
+<style>
+  body { text-align:center; background:#111; color:white; }
+  canvas { background:black; display:block; margin:20px auto; border:2px solid white; }
+  button { padding:8px 16px; font-size:16px; }
+</style>
+</head>
+<body>
+
+<h2>Player 1: Tilt Sensor | Player 2: Keyboard (A / D)</h2>
+<button id="connectArduino">Connect Arduino (Player 1)</button>
+
+<canvas id="gameCanvas" width="600" height="400"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+const paddleWidth = 100;
+const paddleHeight = 10;
+const paddleSpeed = 6;
+const ballRadius = 8;
+
+// Paddle positions
+let p1x = (canvas.width - paddleWidth) / 2; // Player 1 (bottom)
+let p2x = (canvas.width - paddleWidth) / 2; // Player 2 (top)
+
+// Ball
+let ballX = canvas.width / 2;
+let ballY = canvas.height / 2;
+let dx = 3;
+let dy = 3;
+
+// Commands
+let tiltCmd = "";
+let keyLeft = false;
+let keyRight = false;
+
+// ----------------- Arduino (Player 1) -----------------
+async function connectArduino() {
+  const port = await navigator.serial.requestPort();
+  await port.open({ baudRate: 9600 });
+
+  const decoder = new TextDecoderStream();
+  port.readable.pipeTo(decoder.writable);
+  const reader = decoder.readable.getReader();
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    tiltCmd = value.trim(); // "L" or "R"
+  }
+}
+
+document.getElementById("connectArduino")
+  .addEventListener("click", connectArduino);
+
+// ----------------- Keyboard (Player 2) -----------------
+document.addEventListener("keydown", e => {
+  if (e.key === "a" || e.key === "A") keyLeft = true;
+  if (e.key === "d" || e.key === "D") keyRight = true;
+});
+
+document.addEventListener("keyup", e => {
+  if (e.key === "a" || e.key === "A") keyLeft = false;
+  if (e.key === "d" || e.key === "D") keyRight = false;
+});
+
+// ----------------- Game Loop -----------------
+function update() {
+  // Player 1 (Tilt)
+  if (tiltCmd === "L") p1x -= paddleSpeed;
+  if (tiltCmd === "R") p1x += paddleSpeed;
+
+  // Player 2 (Keyboard)
+  if (keyLeft) p2x -= paddleSpeed;
+  if (keyRight) p2x += paddleSpeed;
+
+  // Clamp paddles
+  p1x = Math.max(0, Math.min(canvas.width - paddleWidth, p1x));
+  p2x = Math.max(0, Math.min(canvas.width - paddleWidth, p2x));
+
+  // Ball movement
+  ballX += dx;
+  ballY += dy;
+
+  // Wall bounce
+  if (ballX < ballRadius || ballX > canvas.width - ballRadius) dx *= -1;
+
+  // Paddle collisions
+  if (
+    ballY > canvas.height - paddleHeight - ballRadius &&
+    ballX > p1x && ballX < p1x + paddleWidth
+  ) dy *= -1;
+
+  if (
+    ballY < paddleHeight + ballRadius &&
+    ballX > p2x && ballX < p2x + paddleWidth
+  ) dy *= -1;
+
+  // Reset if missed
+  if (ballY < 0 || ballY > canvas.height) {
+    ballX = canvas.width / 2;
+    ballY = canvas.height / 2;
+    dy *= -1;
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Paddles
+  ctx.fillStyle = "white";
+  ctx.fillRect(p1x, canvas.height - paddleHeight, paddleWidth, paddleHeight);
+  ctx.fillRect(p2x, 0, paddleWidth, paddleHeight);
+
+  // Ball
+  ctx.beginPath();
+  ctx.arc(ballX, ballY, ballRadius, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+
+</body>
+</html>

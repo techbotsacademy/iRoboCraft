@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>2-Player Tilt Game – Debug Version</title>
+
+<style>
+  body {
+    background:#111;
+    color:white;
+    text-align:center;
+    font-family:Arial;
+  }
+  canvas {
+    background:black;
+    border:2px solid white;
+    display:block;
+    margin:10px auto;
+  }
+  #log {
+    background:#222;
+    color:#0f0;
+    height:160px;
+    overflow:auto;
+    font-family:monospace;
+    padding:8px;
+    margin:10px auto;
+    width:600px;
+    text-align:left;
+  }
+  button {
+    padding:8px 16px;
+    margin:6px;
+  }
+</style>
+</head>
+
+<body>
+
+<h2>2-Player Online Tilt Game (Debug Enabled)</h2>
+<p>Player 1: Arduino Tilt | Player 2: Keyboard (A / D)</p>
+
+<button id="connectArduino">Connect Arduino (Player 1)</button>
+
+<div id="log"></div>
+
+<canvas id="game" width="600" height="400"></canvas>
+
+<script>
+// -------------------- DEBUG LOGGER --------------------
+const logDiv = document.getElementById("log");
+
+function log(msg) {
+  const line = document.createElement("div");
+  line.textContent = msg;
+  logDiv.appendChild(line);
+  logDiv.scrollTop = logDiv.scrollHeight;
+}
+
+// -------------------- GAME SETUP --------------------
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let p1 = 250;   // bottom paddle (tilt)
+let p2 = 250;   // top paddle (keyboard)
+
+let left = false;
+let right = false;
+let tiltCmd = "";
+
+let ballX = 300, ballY = 200;
+let dx = 3, dy = 3;
+
+// -------------------- WEBSOCKET --------------------
+const WS_URL = "wss://YOUR_REPLIT_URL_HERE";   // 👈 CHANGE THIS
+const ws = new WebSocket(WS_URL);
+
+ws.onopen = () => log("WebSocket connected");
+ws.onclose = () => log("WebSocket disconnected");
+
+ws.onmessage = e => {
+  log("RECEIVED → " + e.data);
+
+  const d = JSON.parse(e.data);
+
+  if (d.type === "tilt") {
+    tiltCmd = d.value;
+    log("Tilt command: " + tiltCmd);
+  }
+
+  if (d.type === "key") {
+    left = d.left;
+    right = d.right;
+    log(`Keyboard state → Left:${left} Right:${right}`);
+  }
+};
+
+// -------------------- ARDUINO (PLAYER 1) --------------------
+document.getElementById("connectArduino").onclick = async () => {
+  try {
+    const port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 9600 });
+
+    log("Arduino connected");
+
+    const reader = port.readable
+      .pipeThrough(new TextDecoderStream())
+      .getReader();
+
+    while (true) {
+      const { value } = await reader.read();
+      if (!value) continue;
+
+      const cmd = value.trim();
+      log("SENT (Arduino) → " + cmd);
+
+      ws.send(JSON.stringify({
+        type: "tilt",
+        value: cmd
+      }));
+    }
+  } catch (err) {
+    log("Arduino error: " + err);
+  }
+};
+
+// -------------------- KEYBOARD (PLAYER 2) --------------------
+document.addEventListener("keydown", e => {
+  if (e.key === "a") left = true;
+  if (e.key === "d") right = true;
+
+  ws.send(JSON.stringify({ type:"key", left, right }));
+  log(`SENT (Keyboard) → Left:${left} Right:${right}`);
+});
+
+document.addEventListener("keyup", e => {
+  if (e.key === "a") left = false;
+  if (e.key === "d") right = false;
+
+  ws.send(JSON.stringify({ type:"key", left, right }));
+  log(`SENT (Keyboard) → Left:${left} Right:${right}`);
+});
+
+// -------------------- GAME LOOP --------------------
+function loop() {
+  // Move paddles
+  if (tiltCmd === "L") p1 -= 6;
+  if (tiltCmd === "R") p1 += 6;
+  if (left) p2 -= 6;
+  if (right) p2 += 6;
+
+  p1 = Math.max(0, Math.min(500, p1));
+  p2 = Math.max(0, Math.min(500, p2));
+
+  // Move ball
+  ballX += dx;
+  ballY += dy;
+
+  if (ballX < 8 || ballX > 592) dx *= -1;
+
+  if (ballY > 380 && ballX > p1 && ballX < p1 + 100) dy *= -1;
+  if (ballY < 20 && ballX > p2 && ballX < p2 + 100) dy *= -1;
+
+  if (ballY < 0 || ballY > 400) {
+    ballX = 300;
+    ballY = 200;
+  }
+
+  // Draw
+  ctx.clearRect(0,0,600,400);
+  ctx.fillStyle = "white";
+
+  ctx.fillRect(p1, 390, 100, 10); // Player 1
+  ctx.fillRect(p2, 0, 100, 10);   // Player 2
+
+  ctx.beginPath();
+  ctx.arc(ballX, ballY, 8, 0, Math.PI * 2);
+  ctx.fill();
+
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+
+</body>
+</html>
