@@ -25,10 +25,10 @@ void loop() {
   int state = digitalRead(tilt_pin);
   // print out the state of the button:
   if(state){
-    Serial.println("U");
+    Serial.println("D");
   }
   else {
-    Serial.println("D");
+    Serial.println("U");
   }
   delay(1);  // delay in between reads for stability
 }
