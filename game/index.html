@@ -80,11 +80,11 @@ async function readSerial() {
     const { value, done } = await reader.read();
     if (done) break;
 
-    buffer += value;
-    let lines = buffer.split("\n");
-    buffer = lines.pop();
-
-    lines.forEach(cmd => handleCommand(cmd.trim()));
+    for (const char of value) {
+      if (char === 'U' || char === 'D') {
+        handleCommand(char);
+      }
+    }
   }
 }
 
