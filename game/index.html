@@ -44,9 +44,6 @@
 </head>
 
 <body>
-
-<button id="connectBtn">Connect to Arduino</button>
-
 <div id="gameArea">
   <div id="sprite"></div>
   <div id="ground"></div>
@@ -65,13 +62,11 @@ const debug = document.getElementById("debug");
 
 let isJumping = false;
 
-document.getElementById("connectBtn").addEventListener("click", async () => {
-  port = await navigator.serial.requestPort();
-  await port.open({ baudRate: 9600 });
-  readSerial();
-});
-
 async function readSerial() {
+  if(port==null){
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 9600 });
+  }
   const decoder = new TextDecoderStream();
   port.readable.pipeTo(decoder.writable);
   reader = decoder.readable.getReader();
