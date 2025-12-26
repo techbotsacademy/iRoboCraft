@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Arduino Jump Sprite</title>
+
+  <style>
+    #gameArea {
+      width: 600px;
+      height: 300px;
+      border: 2px solid black;
+      position: relative;
+      background: #eaf6ff;
+      overflow: hidden;
+    }
+
+    #ground {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      height: 40px;
+      background: #654321;
+    }
+
+    #sprite {
+      width: 50px;
+      height: 50px;
+      background: red;
+      position: absolute;
+      left: 275px;
+      bottom: 40px; /* standing on ground */
+      transition: bottom 0.2s, height 0.2s;
+    }
+
+    #debug {
+      margin-top: 10px;
+      height: 80px;
+      overflow-y: auto;
+      border: 1px solid #aaa;
+      font-family: monospace;
+      padding: 5px;
+    }
+  </style>
+</head>
+
+<body>
+
+<button id="connectBtn">Connect to Arduino</button>
+
+<div id="gameArea">
+  <div id="sprite"></div>
+  <div id="ground"></div>
+</div>
+
+<b>Debug:</b>
+<div id="debug"></div>
+
+<script>
+let port;
+let reader;
+let buffer = "";
+
+const sprite = document.getElementById("sprite");
+const debug = document.getElementById("debug");
+
+let isJumping = false;
+
+document.getElementById("connectBtn").addEventListener("click", async () => {
+  port = await navigator.serial.requestPort();
+  await port.open({ baudRate: 9600 });
+  readSerial();
+});
+
+async function readSerial() {
+  const decoder = new TextDecoderStream();
+  port.readable.pipeTo(decoder.writable);
+  reader = decoder.readable.getReader();
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+
+    buffer += value;
+    let lines = buffer.split("\n");
+    buffer = lines.pop();
+
+    lines.forEach(cmd => handleCommand(cmd.trim()));
+  }
+}
+
+function handleCommand(cmd) {
+  debug.innerText += cmd + "\n";
+  debug.scrollTop = debug.scrollHeight;
+
+  if (cmd === "U") jump();
+  if (cmd === "D") crouch();
+}
+
+function jump() {
+  if (isJumping) return;
+
+  isJumping = true;
+  sprite.style.height = "50px";
+  sprite.style.bottom = "140px"; // jump height
+
+  setTimeout(() => {
+    sprite.style.bottom = "40px"; // back to ground
+    isJumping = false;
+  }, 1000);
+}
+
+function crouch() {
+  if (isJumping) return;
+
+  sprite.style.height = "30px"; // crouch
+  sprite.style.bottom = "40px"; // stay on ground
+}
+</script>
+
+</body>
+</html>
