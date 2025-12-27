@@ -1,93 +1,102 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>LAN Ping Pong (Synced)</title>
+<meta charset="utf-8">
+<title>LAN Ping Pong</title>
 <style>
-  body { background:#111; color:white; text-align:center; }
-  canvas { background:black; display:block; margin:auto; }
+body { background:black; color:white; text-align:center; font-family:Arial; }
+canvas { background:#111; display:block; margin:10px auto; }
+button { padding:8px 16px; margin:5px; font-size:16px; }
 </style>
 </head>
-
 <body>
-<h2>🏓 LAN Ping Pong</h2>
-<button id="connect">Connect Arduino (P1)</button>
-<canvas id="c" width="600" height="400"></canvas>
+
+<h2>LAN Ping Pong</h2>
+
+<div id="ui">
+  <button id="joinP1">Join Player 1 (W / S)</button>
+  <button id="joinP2">Join Player 2 (↑ / ↓)</button>
+</div>
+
+<p id="status">Waiting for players...</p>
+
+<canvas id="game" width="800" height="400"></canvas>
 
 <script>
-const c = document.getElementById("c");
-const ctx = c.getContext("2d");
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
 
-let paddle1 = 150;
-let paddle2 = 150;
+let role = null;
+let state = {};
+let started = false;
 
-const SPEED = 10;
-const H = 100;
+// JOIN BUTTONS
+document.getElementById("joinP1").onclick = () => join("p1");
+document.getElementById("joinP2").onclick = () => join("p2");
 
-/* -------- PLAYER 1 : ARDUINO -------- */
-document.getElementById("connect").onclick = async () => {
-  const port = await navigator.serial.requestPort();
-  await port.open({ baudRate: 9600 });
+async function join(player) {
+  role = player;
+  document.getElementById("joinP1").disabled = true;
+  document.getElementById("joinP2").disabled = true;
 
-  const decoder = new TextDecoderStream();
-  port.readable.pipeTo(decoder.writable);
-  const reader = decoder.readable.getReader();
-
-  while (true) {
-    const { value } = await reader.read();
-    if (!value) continue;
-
-    if (value.includes("U")) paddle1 -= SPEED;
-    if (value.includes("D")) paddle1 += SPEED;
-
-    paddle1 = clamp(paddle1);
-
-    send({ paddle1 });
-  }
-};
-
-/* -------- PLAYER 2 : KEYBOARD -------- */
-document.addEventListener("keydown", e => {
-  if (e.key === "ArrowUp") paddle2 -= SPEED;
-  if (e.key === "ArrowDown") paddle2 += SPEED;
-
-  paddle2 = clamp(paddle2);
-  send({ paddle2 });
-});
-
-/* -------- NETWORK -------- */
-function send(data) {
-  fetch("/update", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data)
+  await fetch("/", {
+    method:"POST",
+    body:JSON.stringify({ type:"join", player })
   });
 }
 
-function sync() {
-  fetch("/state")
-    .then(r => r.json())
-    .then(s => {
-      paddle1 = s.paddle1;
-      paddle2 = s.paddle2;
-    });
+// FETCH STATE
+async function fetchState() {
+  state = await (await fetch("/state")).json();
+  started = state.started;
+  if (!started) {
+    document.getElementById("status").innerText = "Waiting for both players...";
+  } else if (!state.running) {
+    document.getElementById("status").innerText = state.winner + " wins! Game Over";
+  } else {
+    document.getElementById("status").innerText = "Game Started!";
+  }
 }
-setInterval(sync, 50);
 
-/* -------- DRAW -------- */
+// INPUT
+window.addEventListener("keydown", e => {
+  if (!started || !role || !state.running) return;
+
+  let dy = 0;
+  if (role === "p1") { if (e.key==="w") dy=-10; if (e.key==="s") dy=10; }
+  if (role === "p2") { if (e.key==="ArrowUp") dy=-10; if (e.key==="ArrowDown") dy=10; }
+
+  if (dy!==0) {
+    fetch("/", { method:"POST", body:JSON.stringify({ type:"move", player:role, dy }) });
+  }
+});
+
+// DRAW
 function draw() {
-  ctx.clearRect(0,0,600,400);
-  ctx.fillStyle = "white";
-  ctx.fillRect(10, paddle1, 10, H);
-  ctx.fillRect(580, paddle2, 10, H);
-  requestAnimationFrame(draw);
+  ctx.clearRect(0,0,800,400);
+  if (!state.p1 && !state.p2) return;
+
+  // paddles
+  ctx.fillStyle="white";
+  ctx.fillRect(10, state.p1y||160, 10, 80);
+  ctx.fillRect(780, state.p2y||160, 10, 80);
+
+  // ball
+  const b = state.ball || {x:400,y:200};
+  ctx.beginPath();
+  ctx.arc(b.x, b.y, 6, 0, Math.PI*2);
+  ctx.fill();
 }
 
-function clamp(y) {
-  return Math.max(0, Math.min(400-H, y));
+// MAIN LOOP
+async function loop() {
+  await fetchState();
+  draw();
+  requestAnimationFrame(loop);
 }
 
-draw();
+loop();
 </script>
+
 </body>
 </html>
