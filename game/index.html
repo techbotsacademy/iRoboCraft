@@ -74,17 +74,13 @@ document.getElementById("connectBtn").addEventListener("click", async () => {
 async function readSerial() {
   const decoder = new TextDecoderStream();
   port.readable.pipeTo(decoder.writable);
-  reader = decoder.readable.getReader();
+  const reader = decoder.readable.getReader();
 
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
 
-    buffer += value;
-    let lines = buffer.split("\n");
-    buffer = lines.pop();
-
-    lines.forEach(cmd => handleCommand(cmd.trim()));
+    handleCommand(value);
   }
 }
 
