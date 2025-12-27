@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>LAN Ping Pong (Synced)</title>
+<style>
+  body { background:#111; color:white; text-align:center; }
+  canvas { background:black; display:block; margin:auto; }
+</style>
+</head>
+
+<body>
+<h2>🏓 LAN Ping Pong</h2>
+<button id="connect">Connect Arduino (P1)</button>
+<canvas id="c" width="600" height="400"></canvas>
+
+<script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+
+let paddle1 = 150;
+let paddle2 = 150;
+
+const SPEED = 10;
+const H = 100;
+
+/* -------- PLAYER 1 : ARDUINO -------- */
+document.getElementById("connect").onclick = async () => {
+  const port = await navigator.serial.requestPort();
+  await port.open({ baudRate: 9600 });
+
+  const decoder = new TextDecoderStream();
+  port.readable.pipeTo(decoder.writable);
+  const reader = decoder.readable.getReader();
+
+  while (true) {
+    const { value } = await reader.read();
+    if (!value) continue;
+
+    if (value.includes("U")) paddle1 -= SPEED;
+    if (value.includes("D")) paddle1 += SPEED;
+
+    paddle1 = clamp(paddle1);
+
+    send({ paddle1 });
+  }
+};
+
+/* -------- PLAYER 2 : KEYBOARD -------- */
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowUp") paddle2 -= SPEED;
+  if (e.key === "ArrowDown") paddle2 += SPEED;
+
+  paddle2 = clamp(paddle2);
+  send({ paddle2 });
+});
+
+/* -------- NETWORK -------- */
+function send(data) {
+  fetch("/update", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  });
+}
+
+function sync() {
+  fetch("/state")
+    .then(r => r.json())
+    .then(s => {
+      paddle1 = s.paddle1;
+      paddle2 = s.paddle2;
+    });
+}
+setInterval(sync, 50);
+
+/* -------- DRAW -------- */
+function draw() {
+  ctx.clearRect(0,0,600,400);
+  ctx.fillStyle = "white";
+  ctx.fillRect(10, paddle1, 10, H);
+  ctx.fillRect(580, paddle2, 10, H);
+  requestAnimationFrame(draw);
+}
+
+function clamp(y) {
+  return Math.max(0, Math.min(400-H, y));
+}
+
+draw();
+</script>
+</body>
+</html>
