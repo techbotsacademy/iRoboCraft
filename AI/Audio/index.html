@@ -21,7 +21,7 @@
       type="text"
       id="modelURL"
       size="60"
-      value="https://teachablemachine.withgoogle.com/models/2q2xv1Z0p/"
+      value="https://teachablemachine.withgoogle.com/models/HRLEKQWxR/"
     />
     <br><br>
     <button onclick="connectArduino()">🔌 1. Start Connect Arduino</button>
@@ -55,45 +55,42 @@
     }
 
     async function startListening() {
-      const statusLabel = document.getElementById("status");
-      const baseURL = document.getElementById("modelURL").value.trim();
-      
-      // Ensure the URL ends with a slash
-      const finalURL = baseURL.endsWith('/') ? baseURL : baseURL + '/';
-      const checkpointURL = finalURL + "model.json";
-      const metadataURL = finalURL + "metadata.json";
-
-      try {
-        statusLabel.innerText = "Loading Model...";
-        model = await tmAudio.load(checkpointURL, metadataURL);
+        const statusLabel = document.getElementById("status");
         
-        statusLabel.innerText = "Listening... 🎤";
-        statusLabel.style.color = "blue";
+        // Safety check to ensure library is loaded
+        if (typeof tmAudio === "undefined") {
+            console.error("Library not ready");
+            alert("The Teachable Machine library is still loading or blocked. Please refresh.");
+            return;
+        }
 
-        // The audio library uses .listen() instead of a manual loop
-        model.listen(async (result) => {
-          const probabilities = result.scores;
-          const labels = model.wordLabels();
-          
-          // Map scores to objects
-          const predictions = labels.map((label, i) => ({
-            className: label,
-            probability: probabilities[i]
-          }));
+        const baseURL = document.getElementById("modelURL").value.trim();
+        const finalURL = baseURL.endsWith('/') ? baseURL : baseURL + '/';
 
-          handlePrediction(predictions);
-        }, {
-          includeSpectrogram: false,
-          probabilityThreshold: 0.75,
-          invokeCallbackOnNoiseAndUnknown: true,
-          overlapFactor: 0.5 
-        });
+        try {
+            statusLabel.innerText = "Loading Model...";
+            // Explicitly load model and metadata
+            model = await tmAudio.load(finalURL + "model.json", finalURL + "metadata.json");
+            
+            statusLabel.innerText = "Listening... 🎤";
+            statusLabel.style.color = "blue";
 
-      } catch (err) {
-        console.error(err);
-        alert("Error loading model. Check your URL and Internet connection.");
-        statusLabel.innerText = "Error Loading Model";
-      }
+            model.listen(async (result) => {
+                const predictions = model.wordLabels().map((label, i) => ({
+                    className: label,
+                    probability: result.scores[i]
+                }));
+                handlePrediction(predictions);
+            }, {
+                probabilityThreshold: 0.75,
+                overlapFactor: 0.5 
+            });
+
+        } catch (err) {
+            console.error("Load Error:", err);
+            statusLabel.innerText = "Error Loading Model";
+            alert("Could not fetch the model files. Ensure your Teachable Machine model is 'Published' and the URL is correct.");
+        }
     }
 
     async function handlePrediction(predictions) {
