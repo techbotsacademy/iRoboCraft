@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teachable Machine Audio → Arduino</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
+    #status { font-weight: bold; color: #d9534f; }
+    #prediction { font-size: 1.2em; color: #5cb85c; }
+    .controls { margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+
+  <h2>🚨 Sound Detection → Arduino</h2>
+
+  <div class="controls">
+    <label>Teachable Machine Model URL:</label><br>
+    <input
+      type="text"
+      id="modelURL"
+      size="60"
+      value="https://teachablemachine.withgoogle.com/models/2q2xv1Z0p/"
+    />
+    <br><br>
+    <button onclick="connectArduino()">🔌 1. Start Connect Arduino</button>
+    <button onclick="startListening()">🎤 2. Start Listening</button>
+  </div>
+
+  <hr>
+  <p>Status: <span id="status">Idle</span></p>
+  <p>Prediction: <span id="prediction">--</span></p>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/audio@0.8.4/dist/teachablemachine-audio.min.js"></script>
+
+  <script>
+    let model, port, writer;
+    let lastAmbulanceTime = 0;
+    const COOLDOWN_MS = 60000;
+
+    // Web Serial API to connect to Arduino
+    async function connectArduino() {
+      try {
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 9600 });
+        writer = port.writable.getWriter();
+        document.getElementById("status").innerText = "Arduino Connected ✅";
+        document.getElementById("status").style.color = "green";
+      } catch (err) {
+        console.error(err);
+        alert("Failed to connect to Arduino. Make sure you are using Chrome/Edge and your device is plugged in.");
+      }
+    }
+
+    async function startListening() {
+      const statusLabel = document.getElementById("status");
+      const baseURL = document.getElementById("modelURL").value.trim();
+      
+      // Ensure the URL ends with a slash
+      const finalURL = baseURL.endsWith('/') ? baseURL : baseURL + '/';
+      const checkpointURL = finalURL + "model.json";
+      const metadataURL = finalURL + "metadata.json";
+
+      try {
+        statusLabel.innerText = "Loading Model...";
+        model = await tmAudio.load(checkpointURL, metadataURL);
+        
+        statusLabel.innerText = "Listening... 🎤";
+        statusLabel.style.color = "blue";
+
+        // The audio library uses .listen() instead of a manual loop
+        model.listen(async (result) => {
+          const probabilities = result.scores;
+          const labels = model.wordLabels();
+          
+          // Map scores to objects
+          const predictions = labels.map((label, i) => ({
+            className: label,
+            probability: probabilities[i]
+          }));
+
+          handlePrediction(predictions);
+        }, {
+          includeSpectrogram: false,
+          probabilityThreshold: 0.75,
+          invokeCallbackOnNoiseAndUnknown: true,
+          overlapFactor: 0.5 
+        });
+
+      } catch (err) {
+        console.error(err);
+        alert("Error loading model. Check your URL and Internet connection.");
+        statusLabel.innerText = "Error Loading Model";
+      }
+    }
+
+    async function handlePrediction(predictions) {
+      // Get the class with the highest probability
+      const top = predictions.reduce((a, b) =>
+        a.probability > b.probability ? a : b
+      );
+
+      document.getElementById("prediction").innerText =
+        `${top.className} (${(top.probability * 100).toFixed(1)}%)`;
+
+      const now = Date.now();
+
+      // Check for ambulance (with cooldown logic)
+      if (top.className === "Ambulance" && top.probability > 0.8) {
+        if (now - lastAmbulanceTime > COOLDOWN_MS) {
+          await sendToArduino("A");
+          lastAmbulanceTime = now;
+        }
+      } 
+      // Check for Horn
+      else if (top.className === "Horn" && top.probability > 0.8) {
+        await sendToArduino("H");
+      } 
+      // Background / Other
+      else {
+        await sendToArduino("B");
+      }
+    }
+
+    async function sendToArduino(value) {
+      if (!writer) return;
+      try {
+        const data = new TextEncoder().encode(value);
+        await writer.write(data);
+      } catch (err) {
+        console.error("Serial Write Error:", err);
+      }
+    }
+  </script>
+
+</body>
+</html>
