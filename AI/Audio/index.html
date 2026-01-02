@@ -1,136 +1,154 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Teachable Machine Audio → Arduino</title>
-  <style>
-    body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
-    #status { font-weight: bold; color: #d9534f; }
-    #prediction { font-size: 1.2em; color: #5cb85c; }
-    .controls { margin-bottom: 20px; }
-  </style>
+    <meta charset="UTF-8">
+    <title>Audio → Arduino (Working Version)</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; line-height: 1.6; background: #f4f7f6; }
+        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 600px; margin: auto; }
+        #status { font-weight: bold; color: #d9534f; }
+        #label-container div { margin: 5px 0; padding: 5px; border-bottom: 1px solid #eee; }
+        button { padding: 10px 20px; font-size: 1rem; cursor: pointer; border-radius: 5px; border: none; background: #3498db; color: white; margin-right: 10px; }
+        button:hover { background: #2980b9; }
+        .prediction-highlight { font-size: 1.5em; color: #27ae60; margin-top: 15px; font-weight: bold; }
+        input { width: 100%; padding: 8px; margin-bottom: 15px; }
+    </style>
 </head>
 <body>
 
-  <h2>🚨 Sound Detection → Arduino</h2>
+<div class="card">
+    <h2>🚨 Sound Detection to Arduino</h2>
 
-  <div class="controls">
-    <label>Teachable Machine Model URL:</label><br>
+    <!-- ✅ Editable Model URL -->
+    <label><strong>Teachable Machine Model URL:</strong></label>
     <input
-      type="text"
-      id="modelURL"
-      size="60"
-      value="https://teachablemachine.withgoogle.com/models/HRLEKQWxR/"
+        type="text"
+        id="modelURL"
+        value="https://teachablemachine.withgoogle.com/models/HRLEKQWxR/"
     />
-    <br><br>
-    <button onclick="connectArduino()">🔌 1. Start Connect Arduino</button>
-    <button onclick="startListening()">🎤 2. Start Listening</button>
-  </div>
 
-  <hr>
-  <p>Status: <span id="status">Idle</span></p>
-  <p>Prediction: <span id="prediction">--</span></p>
+    <p>Status: <span id="status">Idle</span></p>
 
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/audio@0.8.4/dist/teachablemachine-audio.min.js"></script>
+    <div class="controls">
+        <button onclick="connectArduino()">🔌 1. Connect Arduino</button>
+        <button onclick="init()">🎤 2. Start Listening</button>
+    </div>
 
-  <script>
-    let model, port, writer;
+    <div id="label-container"></div>
+    <div class="prediction-highlight" id="top-prediction">Top: --</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/speech-commands@0.4.0/dist/speech-commands.min.js"></script>
+
+<script type="text/javascript">
+    let recognizer, port, writer;
     let lastAmbulanceTime = 0;
-    const COOLDOWN_MS = 60000;
+    const COOLDOWN_MS = 60000; // 1 minute cooldown
 
-    // Web Serial API to connect to Arduino
+    // 1. Connect to Arduino via Web Serial
     async function connectArduino() {
-      try {
-        port = await navigator.serial.requestPort();
-        await port.open({ baudRate: 9600 });
-        writer = port.writable.getWriter();
-        document.getElementById("status").innerText = "Arduino Connected ✅";
-        document.getElementById("status").style.color = "green";
-      } catch (err) {
-        console.error(err);
-        alert("Failed to connect to Arduino. Make sure you are using Chrome/Edge and your device is plugged in.");
-      }
-    }
-
-    async function startListening() {
-        const statusLabel = document.getElementById("status");
-        
-        // Safety check to ensure library is loaded
-        if (typeof tmAudio === "undefined") {
-            console.error("Library not ready");
-            alert("The Teachable Machine library is still loading or blocked. Please refresh.");
-            return;
-        }
-
-        const baseURL = document.getElementById("modelURL").value.trim();
-        const finalURL = baseURL.endsWith('/') ? baseURL : baseURL + '/';
-
         try {
-            statusLabel.innerText = "Loading Model...";
-            // Explicitly load model and metadata
-            model = await tmAudio.load(finalURL + "model.json", finalURL + "metadata.json");
-            
-            statusLabel.innerText = "Listening... 🎤";
-            statusLabel.style.color = "blue";
-
-            model.listen(async (result) => {
-                const predictions = model.wordLabels().map((label, i) => ({
-                    className: label,
-                    probability: result.scores[i]
-                }));
-                handlePrediction(predictions);
-            }, {
-                probabilityThreshold: 0.75,
-                overlapFactor: 0.5 
-            });
-
+            port = await navigator.serial.requestPort();
+            await port.open({ baudRate: 9600 });
+            writer = port.writable.getWriter();
+            document.getElementById("status").innerText = "Arduino Connected ✅";
+            document.getElementById("status").style.color = "green";
         } catch (err) {
-            console.error("Load Error:", err);
-            statusLabel.innerText = "Error Loading Model";
-            alert("Could not fetch the model files. Ensure your Teachable Machine model is 'Published' and the URL is correct.");
+            console.error(err);
+            alert("Serial Connection Failed. Use Chrome/Edge.");
         }
     }
 
-    async function handlePrediction(predictions) {
-      // Get the class with the highest probability
-      const top = predictions.reduce((a, b) =>
-        a.probability > b.probability ? a : b
-      );
+    async function createModel() {
+        const baseURL = document.getElementById("modelURL").value.trim();
 
-      document.getElementById("prediction").innerText =
-        `${top.className} (${(top.probability * 100).toFixed(1)}%)`;
+        const checkpointURL = baseURL + "model.json";
+        const metadataURL = baseURL + "metadata.json";
 
-      const now = Date.now();
+        const recognizer = speechCommands.create(
+            "BROWSER_FFT",
+            undefined,
+            checkpointURL,
+            metadataURL
+        );
 
-      // Check for ambulance (with cooldown logic)
-      if (top.className === "Ambulance" && top.probability > 0.8) {
-        if (now - lastAmbulanceTime > COOLDOWN_MS) {
-          await sendToArduino("A");
-          lastAmbulanceTime = now;
-        }
-      } 
-      // Check for Horn
-      else if (top.className === "Horn" && top.probability > 0.8) {
-        await sendToArduino("H");
-      } 
-      // Background / Other
-      else {
-        await sendToArduino("B");
-      }
+        await recognizer.ensureModelLoaded();
+        return recognizer;
     }
 
-    async function sendToArduino(value) {
-      if (!writer) return;
-      try {
-        const data = new TextEncoder().encode(value);
+    // 2. Start Model and Microphone
+    async function init() {
+        const status = document.getElementById("status");
+        status.innerText = "Loading Model...";
+
+        recognizer = await createModel();
+        const classLabels = recognizer.wordLabels();
+        const labelContainer = document.getElementById("label-container");
+
+        labelContainer.innerHTML = "";
+        for (let i = 0; i < classLabels.length; i++) {
+            labelContainer.appendChild(document.createElement("div"));
+        }
+
+        status.innerText = "Listening... 🎤";
+        status.style.color = "blue";
+
+        recognizer.listen(result => {
+            let highestScore = 0;
+            let highestLabel = "";
+
+            for (let i = 0; i < classLabels.length; i++) {
+                const score = result.scores[i];
+                labelContainer.childNodes[i].innerHTML =
+                    classLabels[i] + ": " + score.toFixed(2);
+
+                if (score > highestScore) {
+                    highestScore = score;
+                    highestLabel = classLabels[i];
+                }
+            }
+
+            document.getElementById("top-prediction").innerText =
+                `Top: ${highestLabel}`;
+
+            if (highestScore > 0.85) {
+                handleArduinoLogic(highestLabel);
+            }
+        }, {
+            includeSpectrogram: false,
+            probabilityThreshold: 0.75,
+            invokeCallbackOnNoiseAndUnknown: true,
+            overlapFactor: 0.5
+        });
+    }
+
+    async function handleArduinoLogic(label) {
+        if (!writer) return;
+
+        const now = Date.now();
+
+        if (label === "Ambulance") {
+            if (now - lastAmbulanceTime > COOLDOWN_MS) {
+                await sendToArduino("A");
+                lastAmbulanceTime = now;
+            }
+        }
+        else if (label === "Horn") {
+            if (now - lastAmbulanceTime > COOLDOWN_MS) {
+                await sendToArduino("H");
+            }
+        }
+        else {
+            await sendToArduino("B");
+        }
+    }
+
+    async function sendToArduino(char) {
+        const data = new TextEncoder().encode(char);
         await writer.write(data);
-      } catch (err) {
-        console.error("Serial Write Error:", err);
-      }
     }
-  </script>
+</script>
 
 </body>
 </html>
