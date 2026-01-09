@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Continuous Honk vs Emergency Detection</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    button {
+      padding: 10px 20px;
+      margin-right: 10px;
+      font-size: 16px;
+    }
+    .status {
+      margin-top: 15px;
+      font-weight: bold;
+    }
+    pre {
+      background: #f4f4f4;
+      padding: 15px;
+      margin-top: 15px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>🚨 Continuous Sound Detection (Honk vs Emergency)</h2>
+
+  <button id="start">Start Listening</button>
+  <button id="stop" disabled>Stop</button>
+
+  <div class="status" id="status">Loading model…</div>
+  <pre id="output">Waiting…</pre>
+
+  <script type="module">
+    import { pipeline } from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1";
+
+    const startBtn = document.getElementById("start");
+    const stopBtn = document.getElementById("stop");
+    const status = document.getElementById("status");
+    const output = document.getElementById("output");
+
+    let audioContext, analyser, source, stream;
+    let running = false;
+
+    // Load AudioSet AST model
+    const classifier = await pipeline(
+      "audio-classification",
+      "onnx-community/ast-finetuned-audioset-10-10-0.4593-ONNX"
+    );
+
+    status.textContent = "Model loaded. Click Start Listening.";
+
+    startBtn.onclick = async () => {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      audioContext = new AudioContext({ sampleRate: 16000 });
+      source = audioContext.createMediaStreamSource(stream);
+
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 16384; // ~1 second buffer
+
+      source.connect(analyser);
+
+      running = true;
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+
+      status.textContent = "Listening…";
+      listenLoop();
+    };
+
+    stopBtn.onclick = () => {
+      running = false;
+      stream.getTracks().forEach(t => t.stop());
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      status.textContent = "Stopped.";
+    };
+
+    async function listenLoop() {
+      const buffer = new Float32Array(analyser.fftSize);
+      let history = [];
+
+      while (running) {
+        analyser.getFloatTimeDomainData(buffer);
+
+        const results = await classifier(buffer, { topk: 5 });
+
+        const relevant = results.filter(r =>
+          r.label.toLowerCase().includes("siren") ||
+          r.label.toLowerCase().includes("horn")
+        );
+
+        let decision = "No relevant sound";
+
+        if (relevant.length > 0) {
+          const best = relevant[0];
+
+          history.push(best.score);
+          if (history.length > 5) history.shift();
+
+          const avgScore =
+            history.reduce((a, b) => a + b, 0) / history.length;
+
+          if (best.label.includes("siren") && avgScore > 0.6) {
+            decision = "🚨 EMERGENCY VEHICLE DETECTED";
+          } else if (best.label.includes("horn") && avgScore > 0.6) {
+            decision = "📢 VEHICLE HORN DETECTED";
+          }
+
+          output.textContent =
+            relevant.map(r =>
+              `${r.label}: ${(r.score * 100).toFixed(1)}%`
+            ).join("\n") +
+            "\n\nDecision: " + decision;
+        } else {
+          output.textContent = "No horn or siren detected";
+        }
+
+        // Run inference ~2 times per second
+        await new Promise(r => setTimeout(r, 500));
+      }
+    }
+  </script>
+
+</body>
+</html>
