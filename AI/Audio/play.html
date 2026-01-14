@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Honk vs Emergency Sound Detection</title>
+</head>
+<body>
+  <h2>Honk vs Emergency Sound Classifier</h2>
+
+  <!-- Model selector -->
+  <label for="modelInput">Model ID:</label>
+  <input type="text" id="modelInput" value="onnx-community/ast-finetuned-audioset-10-10-0.4593-ONNX" size="60" />
+  <button id="loadModelBtn">Load Model</button>
+
+  <br><br>
+
+  <!-- Audio input -->
+  <input type="file" id="audioInput" accept="audio/*" disabled />
+  <p id="status">Load a model first.</p>
+
+  <pre id="output"></pre>
+
+  <!-- Transformers.js -->
+  <script type="module">
+    import { pipeline } from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1";
+
+    const modelInput = document.getElementById("modelInput");
+    const loadModelBtn = document.getElementById("loadModelBtn");
+    const input = document.getElementById("audioInput");
+    const output = document.getElementById("output");
+    const status = document.getElementById("status");
+
+    let classifier = null;
+
+    loadModelBtn.addEventListener("click", async () => {
+      const modelId = modelInput.value.trim();
+      if (!modelId) return;
+
+      status.textContent = "Loading model...";
+      input.disabled = true;
+
+      try {
+        classifier = await pipeline("audio-classification", modelId);
+        status.textContent = `Model loaded: ${modelId}. Upload audio.`;
+        input.disabled = false;
+      } catch (err) {
+        console.error(err);
+        status.textContent = `Failed to load model: ${modelId}`;
+      }
+    });
+
+    input.addEventListener("change", async () => {
+      if (!classifier) return;
+
+      const file = input.files[0];
+      if (!file) return;
+
+      status.textContent = "Decoding audio...";
+
+      const arrayBuffer = await file.arrayBuffer();
+      const audioContext = new AudioContext({ sampleRate: 16000 });
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      const audioData = audioBuffer.getChannelData(0);
+
+      status.textContent = "Running inference...";
+
+      const results = await classifier(audioData, { topk: 10 });
+
+      const filtered = results.filter(r =>
+        r.label.toLowerCase().includes("siren") ||
+        r.label.toLowerCase().includes("horn")
+      );
+
+      output.textContent = filtered.length
+        ? filtered.map(r => `${r.label}: ${(r.score * 100).toFixed(2)}%`).join("\n")
+        : "No horn or emergency sound detected.";
+
+      status.textContent = "Done.";
+    });
+  </script>
+</body>
+</html>

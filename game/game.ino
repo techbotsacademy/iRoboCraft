@@ -30,5 +30,5 @@ void loop() {
   else {
     Serial.println("U");
   }
-  delay(1);  // delay in between reads for stability
+  delay(100);  // delay in between reads for stability
 }
