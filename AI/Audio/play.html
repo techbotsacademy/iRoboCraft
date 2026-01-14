@@ -93,12 +93,14 @@
         : "No horn or emergency sound detected.";
 
         if(filtered.length>0){
-            const isSiren = output.textContent.includes("siren");
-            
-            if (isSiren) {
-                await sendToArduino("G"); // 1 = detected
-            } else {
-                await sendToArduino("R"); // 0 = not detected
+            if(port!=null){
+                const isSiren = output.textContent.includes("siren");
+                
+                if (isSiren) {
+                    await sendToArduino("G"); // 1 = detected
+                } else {
+                    await sendToArduino("R"); // 0 = not detected
+                }
             }
         }
 
