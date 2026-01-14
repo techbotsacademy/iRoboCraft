@@ -11,6 +11,7 @@
   <label for="modelInput">Model ID:</label>
   <input type="text" id="modelInput" value="onnx-community/ast-finetuned-audioset-10-10-0.4593-ONNX" size="60" />
   <button id="loadModelBtn">Load Model</button>
+  <button onclick="connectSerial()">Connect Arduino</button>
 
   <br><br>
 
@@ -21,6 +22,22 @@
   <pre id="output"></pre>
 
   <!-- Transformers.js -->
+<script>
+    let port;
+    let writer;
+    
+    async function connectSerial() {
+      port = await navigator.serial.requestPort();
+      await port.open({ baudRate: 9600 });
+      writer = port.writable.getWriter();
+    }
+    
+    async function sendToArduino(text) {
+      const encoder = new TextEncoder();
+      await writer.write(encoder.encode(text));
+    }
+</script>
+
   <script type="module">
     import { pipeline } from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1";
 
@@ -74,6 +91,16 @@
       output.textContent = filtered.length
         ? filtered.map(r => `${r.label}: ${(r.score * 100).toFixed(2)}%`).join("\n")
         : "No horn or emergency sound detected.";
+
+        if(filtered.length>0){
+            const isSiren = output.textContent.includes("siren");
+            
+            if (isSiren) {
+                await sendToArduino("G"); // 1 = detected
+            } else {
+                await sendToArduino("R"); // 0 = not detected
+            }
+        }
 
       status.textContent = "Done.";
     });
