@@ -1,28 +1,22 @@
 void setup() {
   Serial.begin(9600);
+  pinMode('2',OUTPUT);
+  pinMode('3',OUTPUT);
 }
 
 void loop() {
   if (Serial.available()) {
     char c = Serial.read();
 
-    if (c == 'A') {
+    if (c == 'R') {
       // Ambulance logic
-      digitalWrite(13,HIGH);
-      digitalWrite(12,LOW);
-      digitalWrite(11,LOW);
+      digitalWrite(2,HIGH);
+      digitalWrite(3,LOW);
     }
-    else if (c == 'H') {
+    else if(c=='G'){
       // Horn logic
-      digitalWrite(13,LOW);
-      digitalWrite(12,HIGH);
-      digitalWrite(11,LOW);
-    }
-    else if (c == 'B') {
-      // Background logic
-      digitalWrite(13,LOW);
-      digitalWrite(12,LOW);
-      digitalWrite(11,HIGH);
+      digitalWrite(2,LOW);
+      digitalWrite(3,HIGH);
     }
   }
 }
