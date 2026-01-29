@@ -59,7 +59,7 @@
       port = await navigator.serial.requestPort();
       await port.open({ baudRate: 9600 });
       writer = port.writable.getWriter();
-      alert("Arduino Connected! Ab Camera Start Karein.");
+      alert("Arduino Connected! Please Start Camera");
     } catch (err) {
       alert("Serial Connection Failed. Please use Chrome!");
     }
