@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>AI Lift Control with Motor</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      height: 100vh;
+      background: linear-gradient(135deg, #1d2671, #c33764);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-family: Arial;
+      color: white;
+    }
+    .box {
+      background: rgba(0,0,0,0.4);
+      padding: 20px;
+      border-radius: 20px;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    }
+    button {
+      padding: 12px 24px;
+      font-size: 18px;
+      border-radius: 20px;
+      border: none;
+      cursor: pointer;
+      margin: 10px;
+      background: #fff;
+      color: #1d2671;
+      font-weight: bold;
+    }
+    button:hover { background: #eee; }
+    #webcam-container { margin-top: 15px; border-radius: 15px; overflow: hidden; }
+  </style>
+</head>
+
+<body>
+  <div class="box">
+    <h2>AI Lift Control</h2>
+    <button onclick="connectSerial()">1. Connect Arduino</button>
+    <button onclick="init()">2. Start Camera</button>
+    
+    <h3 id="result">Waiting for Command...</h3>
+    <div id="webcam-container"></div>
+  </div>
+
+<script>
+  const URL = "https://teachablemachine.withgoogle.com/models/s90yeN6cj/";
+  let model, webcam, port, writer;
+
+  // Serial Connection Function
+  async function connectSerial() {
+    try {
+      port = await navigator.serial.requestPort();
+      await port.open({ baudRate: 9600 });
+      writer = port.writable.getWriter();
+      alert("Arduino Connected! Ab Camera Start Karein.");
+    } catch (err) {
+      alert("Serial Connection Failed. Please use Chrome!");
+    }
+  }
+
+  async function init() {
+    model = await tmImage.load(URL + "model.json", URL + "metadata.json");
+    
+    webcam = new tmImage.Webcam(300, 300, true);
+    await webcam.setup();
+    await webcam.play();
+
+    document.getElementById("webcam-container").appendChild(webcam.canvas);
+    window.requestAnimationFrame(loop);
+  }
+
+  async function loop() {
+    webcam.update();
+    await predict();
+    window.requestAnimationFrame(loop);
+  }
+
+ async function predict() {
+    const p = await model.predict(webcam.canvas);
+
+    if (p[0].probability > 0.9) {
+      document.getElementById("result").innerText = "HAND UP ⬆️";
+      sendCommand("U"); // Arduino ke liye 'U' bhej rahe hain
+    } 
+    else if (p[1].probability > 0.9) {
+      document.getElementById("result").innerText = "HAND DOWN ⬇️";
+      sendCommand("D"); // Arduino ke liye 'D' bhej rahe hain
+    }
+    else if (p[2].probability > 0.9) {
+      document.getElementById("result").innerText = "STOP ✋";
+      sendCommand("S"); // Arduino ke liye 'S' bhej rahe hain
+    }
+  }
+
+  async function sendCommand(val) {
+    if (writer) {
+      const data = new TextEncoder().encode(val);
+      await writer.write(data);
+    }
+  }
+</script>
+</body>
+</html>
