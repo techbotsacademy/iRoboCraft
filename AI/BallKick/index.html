@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Hand Contact Ball Game (Mirror Fixed)</title>
+<style>
+  body { margin: 0; overflow: hidden; background: black; }
+  canvas { position: absolute; top: 0; left: 0; }
+  #score {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    color: white;
+    font-size: 20px;
+    z-index: 10;
+  }
+</style>
+</head>
+<body>
+
+<div id="score">Score: 0</div>
+<video id="video" autoplay playsinline></video>
+<canvas id="canvas"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+
+<script>
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+let score = 0;
+
+// Ball
+let ball = {
+  x: canvas.width / 2,
+  y: canvas.height / 2,
+  r: 20,
+  vx: 0,
+  vy: 0,
+  moving: false
+};
+
+// Goal
+const goal = {
+  x: canvas.width - 80,
+  y: canvas.height / 2 - 100,
+  w: 20,
+  h: 200
+};
+
+// Hand tracking
+let lastHandPoints = {};
+let cooldown = false;
+
+// Pose
+const pose = new Pose({
+  locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+});
+
+pose.setOptions({
+  modelComplexity: 1,
+  smoothLandmarks: true,
+  minDetectionConfidence: 0.7,
+  minTrackingConfidence: 0.7
+});
+
+pose.onResults(results => {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // 🔁 MIRROR ENTIRE SCENE
+  ctx.save();
+  ctx.translate(canvas.width, 0);
+  ctx.scale(-1, 1);
+
+  // Camera
+  ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+
+  // Goal
+  ctx.fillStyle = "yellow";
+  ctx.fillRect(goal.x, goal.y, goal.w, goal.h);
+
+  // Ball
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+  ctx.fillStyle = "white";
+  ctx.fill();
+
+  if (results.poseLandmarks) {
+    drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, { color: "#00FF00" });
+    drawLandmarks(ctx, results.poseLandmarks, { color: "#00FF00", radius: 4 });
+
+    // === HAND ZONE: anything above wrist ===
+    const wrist = results.poseLandmarks[16];
+    if (wrist) {
+      const wristY = wrist.y;
+      const handIndices = [16, 18, 19, 20, 22];
+
+      handIndices.forEach(i => {
+        const lm = results.poseLandmarks[i];
+        if (!lm || lm.y > wristY + 0.02) return;
+
+        const x = lm.x * canvas.width;
+        const y = lm.y * canvas.height;
+
+        // Visual hand points
+        ctx.beginPath();
+        ctx.arc(x, y, 10, 0, Math.PI * 2);
+        ctx.strokeStyle = "cyan";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        if (lastHandPoints[i] && !cooldown) {
+          const dx = x - lastHandPoints[i].x;
+          const dy = y - lastHandPoints[i].y;
+          const speed = Math.hypot(dx, dy);
+
+          const distToBall = Math.hypot(x - ball.x, y - ball.y);
+
+          if (distToBall < ball.r + 12 && speed > 5) {
+            const nx = dx / speed;
+            const ny = dy / speed;
+
+            ball.vx = nx * Math.min(speed, 25);
+            ball.vy = ny * Math.min(speed, 25);
+            ball.moving = true;
+
+            cooldown = true;
+            setTimeout(() => cooldown = false, 250);
+          }
+        }
+
+        lastHandPoints[i] = { x, y };
+      });
+    }
+  }
+
+  ctx.restore(); // 🔁 end mirror
+
+  // Ball physics (NOT mirrored)
+  if (ball.moving) {
+    ball.x += ball.vx;
+    ball.y += ball.vy;
+
+    ball.vx *= 0.99;
+    ball.vy *= 0.99;
+
+    if (
+      ball.x > goal.x &&
+      ball.y > goal.y &&
+      ball.y < goal.y + goal.h
+    ) {
+      score++;
+      resetBall();
+    }
+
+    if (Math.abs(ball.vx) < 0.2 && Math.abs(ball.vy) < 0.2) {
+      ball.moving = false;
+    }
+
+    if (
+      ball.x < 0 || ball.x > canvas.width ||
+      ball.y < 0 || ball.y > canvas.height
+    ) {
+      resetBall();
+    }
+  }
+});
+
+function resetBall() {
+  ball.x = canvas.width / 2;
+  ball.y = canvas.height / 2;
+  ball.vx = 0;
+  ball.vy = 0;
+  ball.moving = false;
+  document.getElementById("score").innerText = "Score: " + score;
+}
+
+// Camera
+const camera = new Camera(video, {
+  onFrame: async () => {
+    await pose.send({ image: video });
+  },
+  width: 640,
+  height: 480
+});
+camera.start();
+</script>
+
+</body>
+</html>
