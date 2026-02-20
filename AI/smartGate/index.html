@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Smart Parking Gate</title>
+    <style>
+        /* CSS Part */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a2e;
+            color: white;
+            text-align: center;
+            margin: 0; padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+            background: #16213e;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        h1 { color: #00d2ff; }
+        #video-container {
+            margin: 20px auto;
+            border: 4px solid #00d2ff;
+            border-radius: 10px;
+            overflow: hidden;
+            width: 400px;
+            height: 400px;
+            background: #000;
+        }
+        #label-container {
+            font-size: 28px;
+            font-weight: bold;
+            margin: 20px;
+            padding: 10px;
+            border-radius: 5px;
+            background: #0f3460;
+        }
+        .controls { margin-bottom: 20px; }
+        button {
+            padding: 12px 25px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px;
+            border-radius: 30px;
+            border: none;
+            transition: 0.3s;
+            font-weight: bold;
+        }
+        #start-btn { background: #28a745; color: white; }
+        #connect-btn { background: #ffc107; color: black; }
+        button:hover { opacity: 0.8; transform: scale(1.05); }
+        #status { font-size: 14px; color: #888; }
+        .car-detected { color: #2ecc71 !important; border: 2px solid #2ecc71; }
+    </style>
+</head>
+<body>
+
+
+    <div class="container">
+        <h1>Smart Parking Gate</h1>
+       
+        <div id="video-container"></div>
+        <div id="label-container">Click Start to Begin</div>
+       
+        <div class="controls">
+            <button id="start-btn" onclick="init()">1. Start Camera & AI</button>
+            <button id="connect-btn" onclick="connectArduino()">2. Connect Arduino</button>
+        </div>
+       
+        <p id="status">Status: Disconnected</p>
+    </div>
+
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
+
+    <script>
+        // --- APNA LINK YAHAN PASTE KAREIN ---
+        const URL = "https://teachablemachine.withgoogle.com/models/KaUvAO5UX/";
+
+
+        let model, webcam, labelContainer, maxPredictions;
+        let port, writer;
+        let lastSent = ""; // Baar-baar command na bhejne ke liye
+
+
+        // 1. Arduino Connect Karne ka Function
+        async function connectArduino() {
+            try {
+                port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 9600 });
+                writer = port.writable.getWriter();
+                document.getElementById('status').innerText = "Status: Arduino Connected ✅";
+                document.getElementById('status').style.color = "#2ecc71";
+            } catch (err) {
+                console.error("Serial Connection Failed:", err);
+                alert("Arduino connect nahi ho paya!");
+            }
+        }
+
+
+        // 2. AI Model Load aur Camera Start
+        async function init() {
+            document.getElementById("label-container").innerText = "Loading Model...";
+            const modelURL = URL + "model.json";
+            const metadataURL = URL + "metadata.json";
+
+
+            model = await tmImage.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+
+
+            webcam = new tmImage.Webcam(400, 400, true);
+            await webcam.setup();
+            await webcam.play();
+            window.requestAnimationFrame(loop);
+
+
+            document.getElementById("video-container").appendChild(webcam.canvas);
+            labelContainer = document.getElementById("label-container");
+        }
+
+
+        async function loop() {
+            webcam.update();
+            await predict();
+            window.requestAnimationFrame(loop);
+        }
+
+
+        // 3. Prediction aur Gate Control Logic
+        async function predict() {
+            const prediction = await model.predict(webcam.canvas);
+           
+            let highestConf = 0;
+            let bestClass = "";
+
+
+            for (let i = 0; i < maxPredictions; i++) {
+                if (prediction[i].probability > highestConf) {
+                    highestConf = prediction[i].probability;
+                    bestClass = prediction[i].className;
+                }
+            }
+
+
+            labelContainer.innerText = bestClass.toUpperCase();
+
+
+            // Servo Control Logic
+            if (writer) {
+                const encoder = new TextEncoder();
+               
+                // Agar Car detect hui (Confidence 90% se zyada)
+                if (bestClass === "car" && highestConf > 0.90) {
+                    if (lastSent !== "1") {
+                        await writer.write(encoder.encode("1"));
+                        lastSent = "1";
+                        labelContainer.className = "car-detected";
+                    }
+                }
+                // Bike, Human, ya Empty ke liye
+                else {
+                    if (lastSent !== "0") {
+                        await writer.write(encoder.encode("0"));
+                        lastSent = "0";
+                        labelContainer.className = "";
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>
