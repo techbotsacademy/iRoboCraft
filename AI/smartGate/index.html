@@ -133,29 +133,6 @@ const DEFAULT_URL = "https://teachablemachine.withgoogle.com/models/KaUvAO5UX/";
             }
         }
 
-
-        // 2. AI Model Load aur Camera Start
-        async function init() {
-            document.getElementById("label-container").innerText = "Loading Model...";
-            const modelURL = URL + "model.json";
-            const metadataURL = URL + "metadata.json";
-
-
-            model = await tmImage.load(modelURL, metadataURL);
-            maxPredictions = model.getTotalClasses();
-
-
-            webcam = new tmImage.Webcam(400, 400, true);
-            await webcam.setup();
-            await webcam.play();
-            window.requestAnimationFrame(loop);
-
-
-            document.getElementById("video-container").appendChild(webcam.canvas);
-            labelContainer = document.getElementById("label-container");
-        }
-
-
         async function loop() {
             webcam.update();
             await predict();
