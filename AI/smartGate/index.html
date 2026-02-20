@@ -65,7 +65,14 @@
        
         <div id="video-container"></div>
         <div id="label-container">Click Start to Begin</div>
-       
+    
+        <div class="controls">
+            <input type="text" id="model-url" 
+                value="https://teachablemachine.withgoogle.com/models/KaUvAO5UX/"
+                style="width: 80%; padding:10px; border-radius:10px; border:none; margin-bottom:10px;">
+            <button id="start-btn" onclick="init()">1. Start Camera & AI</button>
+            <button id="connect-btn" onclick="connectArduino()">2. Connect Arduino</button>
+        </div>
         <div class="controls">
             <button id="start-btn" onclick="init()">1. Start Camera & AI</button>
             <button id="connect-btn" onclick="connectArduino()">2. Connect Arduino</button>
@@ -80,8 +87,31 @@
 
 
     <script>
-        // --- APNA LINK YAHAN PASTE KAREIN ---
-        const URL = "https://teachablemachine.withgoogle.com/models/KaUvAO5UX/";
+const DEFAULT_URL = "https://teachablemachine.withgoogle.com/models/KaUvAO5UX/";
+        async function init() {
+
+            let inputURL = document.getElementById("model-url").value.trim();
+
+            // If somehow cleared, fallback to default
+            const URL = inputURL ? inputURL : DEFAULT_URL;
+
+            document.getElementById("label-container").innerText = "Loading Model...";
+
+            const modelURL = URL + "model.json";
+            const metadataURL = URL + "metadata.json";
+
+            model = await tmImage.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+
+            webcam = new tmImage.Webcam(400, 400, true);
+            await webcam.setup();
+            await webcam.play();
+            window.requestAnimationFrame(loop);
+
+            document.getElementById("video-container").innerHTML = "";
+            document.getElementById("video-container").appendChild(webcam.canvas);
+            labelContainer = document.getElementById("label-container");
+        }
 
 
         let model, webcam, labelContainer, maxPredictions;
