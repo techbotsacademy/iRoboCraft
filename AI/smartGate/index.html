@@ -83,7 +83,7 @@
 
 
     <script>
-const DEFAULT_URL = "https://teachablemachine.withgoogle.com/models/KaUvAO5UX/";
+    const DEFAULT_URL = "https://teachablemachine.withgoogle.com/models/z3tL8SGIV/";
         async function init() {
 
             let inputURL = document.getElementById("model-url").value.trim();
@@ -160,7 +160,7 @@ const DEFAULT_URL = "https://teachablemachine.withgoogle.com/models/KaUvAO5UX/";
                 const encoder = new TextEncoder();
                
                 // Agar Car detect hui (Confidence 90% se zyada)
-                if (bestClass === "car" && highestConf > 0.90) {
+                if (bestClass === "Car" && highestConf > 0.90) {
                     if (lastSent !== "1") {
                         await writer.write(encoder.encode("1"));
                         lastSent = "1";
