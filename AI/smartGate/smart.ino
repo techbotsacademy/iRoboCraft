@@ -5,7 +5,7 @@ Servo myGate;
 // --- Settings ---
 int openAngle = 90;   // Angle to open the Gate
 int closeAngle = 0;   // Angle to close the Gate
-int servoPin = 9;     // For servo's digital output
+int servoPin = 6;     // For servo's digital output
 
 void setup() {
   Serial.begin(9600);    // Baud rate 9600
