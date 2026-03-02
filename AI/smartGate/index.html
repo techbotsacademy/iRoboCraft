@@ -1,182 +1,132 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Smart Parking Gate</title>
-    <style>
-        /* CSS Part */
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #1a1a2e;
-            color: white;
-            text-align: center;
-            margin: 0; padding: 20px;
-        }
-        .container {
-            max-width: 600px;
-            margin: auto;
-            background: #16213e;
-            padding: 20px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }
-        h1 { color: #00d2ff; }
-        #video-container {
-            margin: 20px auto;
-            border: 4px solid #00d2ff;
-            border-radius: 10px;
-            overflow: hidden;
-            width: 400px;
-            height: 400px;
-            background: #000;
-        }
-        #label-container {
-            font-size: 28px;
-            font-weight: bold;
-            margin: 20px;
-            padding: 10px;
-            border-radius: 5px;
-            background: #0f3460;
-        }
-        .controls { margin-bottom: 20px; }
-        button {
-            padding: 12px 25px;
-            font-size: 16px;
-            cursor: pointer;
-            margin: 10px;
-            border-radius: 30px;
-            border: none;
-            transition: 0.3s;
-            font-weight: bold;
-        }
-        #start-btn { background: #28a745; color: white; }
-        #connect-btn { background: #ffc107; color: black; }
-        button:hover { opacity: 0.8; transform: scale(1.05); }
-        #status { font-size: 14px; color: #888; }
-        .car-detected { color: #2ecc71 !important; border: 2px solid #2ecc71; }
-    </style>
+  <title>Smart Toll Gate System</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.16.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+
+  <style>
+    body { font-family: Arial; text-align: center; }
+    #container { position: relative; display: inline-block; }
+    video { width: 640px; height: 480px; border: 2px solid black; }
+    canvas { position: absolute; top: 0; left: 0; }
+    button { margin: 10px; padding: 10px 20px; font-size: 16px; }
+    #counter { font-size: 18px; font-weight: bold; margin-top: 10px; }
+    #status { font-weight: bold; }
+  </style>
 </head>
+
 <body>
 
+<h2>SMART TOLL GATE - CAR ONLY</h2>
 
-    <div class="container">
-        <h1>Smart Parking Gate</h1>
-       
-        <div id="video-container"></div>
-        <div id="label-container">Click Start to Begin</div>
-    
-        <div class="controls">
-            <input type="text" id="model-url" 
-                value="https://teachablemachine.withgoogle.com/models/z3tL8SGIV/"
-                style="width: 80%; padding:10px; border-radius:10px; border:none; margin-bottom:10px;">
-            <button id="start-btn" onclick="init()">1. Start Camera & AI</button>
-            <button id="connect-btn" onclick="connectArduino()">2. Connect Arduino</button>
-        </div>
-       
-        <p id="status">Status: Disconnected</p>
-    </div>
+<button onclick="connectArduino()">Connect Arduino</button>
+<button onclick="startCamera()">Start Camera</button>
 
+<br><br>
 
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+<div id="container">
+  <video id="video" autoplay playsinline></video>
+  <canvas id="canvas"></canvas>
+</div>
 
+<div id="counter"></div>
+<p id="status">Loading AI model...</p>
 
-    <script>
-    const DEFAULT_URL = "https://teachablemachine.withgoogle.com/models/z3tL8SGIV/";
-        async function init() {
+<script>
 
-            let inputURL = document.getElementById("model-url").value.trim();
+let model;
+let writer;
+let port;
 
-            // If somehow cleared, fallback to default
-            const URL = inputURL ? inputURL : DEFAULT_URL;
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const statusText = document.getElementById("status");
+const counterDiv = document.getElementById("counter");
 
-            document.getElementById("label-container").innerText = "Loading Model...";
+const allowedClasses = ["person", "car", "bicycle", "motorcycle"];
 
-            const modelURL = URL + "model.json";
-            const metadataURL = URL + "metadata.json";
+async function init() {
+  await tf.setBackend('webgl');
+  await tf.ready();
+  model = await cocoSsd.load();
+  statusText.innerText = "Model Loaded. Connect Arduino & Start Camera.";
+}
 
-            model = await tmImage.load(modelURL, metadataURL);
-            maxPredictions = model.getTotalClasses();
+init();
 
-            webcam = new tmImage.Webcam(400, 400, true);
-            await webcam.setup();
-            await webcam.play();
-            window.requestAnimationFrame(loop);
+async function connectArduino() {
+  port = await navigator.serial.requestPort();
+  await port.open({ baudRate: 9600 });
+  writer = port.writable.getWriter();
+  alert("Arduino Connected!");
+}
 
-            document.getElementById("video-container").innerHTML = "";
-            document.getElementById("video-container").appendChild(webcam.canvas);
-            labelContainer = document.getElementById("label-container");
-        }
+async function startCamera() {
+  const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+  video.srcObject = stream;
 
+  video.onloadedmetadata = () => {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    detectFrame();
+  };
+}
 
-        let model, webcam, labelContainer, maxPredictions;
-        let port, writer;
-        let lastSent = ""; // Baar-baar command na bhejne ke liye
+async function detectFrame() {
 
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // 1. Arduino Connect Karne ka Function
-        async function connectArduino() {
-            try {
-                port = await navigator.serial.requestPort();
-                await port.open({ baudRate: 9600 });
-                writer = port.writable.getWriter();
-                document.getElementById('status').innerText = "Status: Arduino Connected ✅";
-                document.getElementById('status').style.color = "#2ecc71";
-            } catch (err) {
-                console.error("Serial Connection Failed:", err);
-                alert("Arduino connect nahi ho paya!");
-            }
-        }
+  const predictions = await model.detect(video);
 
-        async function loop() {
-            webcam.update();
-            await predict();
-            window.requestAnimationFrame(loop);
-        }
+  let counts = {
+    person: 0,
+    car: 0,
+    bicycle: 0,
+    motorcycle: 0
+  };
 
+  predictions.forEach(pred => {
+    if (allowedClasses.includes(pred.class) && pred.score > 0.5) {
 
-        // 3. Prediction aur Gate Control Logic
-        async function predict() {
-            const prediction = await model.predict(webcam.canvas);
-           
-            let highestConf = 0;
-            let bestClass = "";
+      counts[pred.class]++;
 
+      ctx.strokeStyle = "lime";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(...pred.bbox);
 
-            for (let i = 0; i < maxPredictions; i++) {
-                if (prediction[i].probability > highestConf) {
-                    highestConf = prediction[i].probability;
-                    bestClass = prediction[i].className;
-                }
-            }
+      ctx.fillStyle = "lime";
+      ctx.font = "18px Arial";
+      ctx.fillText(
+        `${pred.class} (${Math.round(pred.score * 100)}%)`,
+        pred.bbox[0],
+        pred.bbox[1] > 20 ? pred.bbox[1] - 5 : 20
+      );
+    }
+  });
 
+  counterDiv.innerHTML =
+    `People: ${counts.person} | Cars: ${counts.car} | ` +
+    `Cycles: ${counts.bicycle} | Motor Bikes: ${counts.motorcycle}`;
 
-            labelContainer.innerText = bestClass.toUpperCase();
+  // ======= IMPORTANT LOGIC =======
+  if (writer) {
+    if (counts.car > 0) {
+        counterDiv.innerHTML = counterDiv.innerHTML+'Sending 1';
+      writer.write(new TextEncoder().encode("1\n"));  // OPEN
+    } else {
+        counterDiv.innerHTML = counterDiv.innerHTML+'Sending 0';
 
+        writer.write(new TextEncoder().encode("0\n"));  // CLOSE
+    }
+  }
 
-            // Servo Control Logic
-            if (writer) {
-                const encoder = new TextEncoder();
-               
-                // Agar Car detect hui (Confidence 90% se zyada)
-                if (bestClass === "Car" && highestConf > 0.90) {
-                    if (lastSent !== "1") {
-                        await writer.write(encoder.encode("1"));
-                        lastSent = "1";
-                        labelContainer.className = "car-detected";
-                    }
-                }
-                // Bike, Human, ya Empty ke liye
-                else {
-                    if (lastSent !== "0") {
-                        await writer.write(encoder.encode("0"));
-                        lastSent = "0";
-                        labelContainer.className = "";
-                    }
-                }
-            }
-        }
-    </script>
+  requestAnimationFrame(detectFrame);
+}
+
+</script>
+
 </body>
 </html>

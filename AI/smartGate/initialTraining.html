@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Mini Object Annotation Tool</title>
+<style>
+  body {
+    font-family: Arial;
+    margin: 0;
+    background: #f4f4f4;
+  }
+
+  .main-container {
+    display: flex;
+    height: 100vh;
+  }
+
+  .left-panel {
+    width: 30%;
+    background: white;
+    padding: 20px;
+    overflow-y: auto;
+    border-right: 2px solid #ddd;
+    box-sizing: border-box;
+  }
+
+  .right-panel {
+    width: 70%;
+    display: flex;
+    justify-content: center;   /* horizontal center */
+    align-items: center;       /* vertical center */
+    background: #e9ecef;
+  }
+
+  #container {
+    position: relative;
+    width: 640px;
+    height: 480px;
+  }
+
+  video, canvas {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+  }
+
+  button {
+    padding: 8px;
+    margin: 5px 0;
+    width: 100%;
+  }
+
+  select {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 10px;
+  }
+
+  .item {
+    padding: 6px;
+    border-bottom: 1px solid #ddd;
+    cursor: pointer;
+  }
+
+  .item:hover {
+    background: #f0f0f0;
+  }
+
+  h2, h3 {
+    margin-top: 0;
+  }
+</style>
+
+<div class="main-container">
+
+  <!-- LEFT SIDE -->
+  <div class="left-panel">
+    <h2>Annotation Controls</h2>
+
+    <label>Select Label:</label>
+    <select id="labelSelect">
+      <option value="car">Car</option>
+      <option value="bike">Bike</option>
+      <option value="person">Person</option>
+      <option value="others">Others</option>
+    </select>
+
+    <button onclick="captureFrame()">Capture Frame</button>
+    <button onclick="resumeVideo()">Resume Live Video</button>
+    <button onclick="clearAll()">Clear All</button>
+
+    <hr>
+
+    <h3>Captured Annotations</h3>
+    <div id="listContainer"></div>
+  </div>
+
+  <!-- RIGHT SIDE -->
+  <div class="right-panel">
+    <div id="container">
+      <video id="video" width="640" height="480" autoplay></video>
+      <canvas id="canvas" width="640" height="480"></canvas>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const labelSelect = document.getElementById('labelSelect');
+const listContainer = document.getElementById('listContainer');
+
+let annotations = [];
+let startX, startY, isDrawing = false;
+let frameCaptured = false;
+let capturedImage = null;
+
+const MAX_PER_CLASS = 4;
+
+// Start Webcam
+navigator.mediaDevices.getUserMedia({ video: true })
+  .then(stream => {
+    video.srcObject = stream;
+  });
+
+// Capture Frame (ONLY here we grab video frame)
+function captureFrame() {
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  capturedImage = new Image();
+  capturedImage.src = canvas.toDataURL("image/png");
+
+  video.style.display = "none";
+  frameCaptured = true;
+}
+
+// Resume Live Video
+function resumeVideo() {
+  video.style.display = "block";
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  annotations = [];
+  updateList();
+  frameCaptured = false;
+  capturedImage = null;
+}
+
+// Drawing Bounding Boxes
+canvas.addEventListener('mousedown', (e) => {
+  if (!frameCaptured) {
+    alert("Please capture a frame first.");
+    return;
+  }
+  startX = e.offsetX;
+  startY = e.offsetY;
+  isDrawing = true;
+});
+
+canvas.addEventListener('mouseup', (e) => {
+  if (!isDrawing || !frameCaptured) return;
+  isDrawing = false;
+
+  let endX = e.offsetX;
+  let endY = e.offsetY;
+
+  let width = endX - startX;
+  let height = endY - startY;
+  let label = labelSelect.value;
+
+  let count = annotations.filter(a => a.label === label).length;
+  if (count >= MAX_PER_CLASS) {
+    alert("Maximum 4 samples allowed for " + label);
+    return;
+  }
+
+  let annotation = {
+    id: Date.now(),
+    label,
+    x: startX,
+    y: startY,
+    width,
+    height
+  };
+
+  annotations.push(annotation);
+  redrawCanvas();
+  updateList();
+});
+
+function redrawCanvas() {
+  if (!capturedImage) return;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(capturedImage, 0, 0);
+
+  annotations.forEach(a => {
+    ctx.strokeStyle = "red";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(a.x, a.y, a.width, a.height);
+    ctx.fillStyle = "red";
+    ctx.fillText(a.label, a.x, a.y - 5);
+  });
+}
+
+function updateList() {
+  listContainer.innerHTML = "";
+
+  annotations.forEach(a => {
+    let div = document.createElement("div");
+    div.className = "item";
+    div.innerHTML = `
+      <strong>${a.label}</strong> 
+      <button onclick="deleteItem(${a.id})">Delete</button>
+    `;
+
+    div.onclick = function(e) {
+      if(!div.innerHTML.includes('span')){
+        div.innerHTML = div.innerHTML + "<span>Label: " + a.label +
+          "\nX: " + a.x +
+          "\nY: " + a.y +
+          "\nWidth: " + a.width +
+          "\nHeight: " + a.height +"</span>"
+      }
+    };
+
+    listContainer.appendChild(div);
+  });
+}
+
+function deleteItem(id) {
+  annotations = annotations.filter(a => a.id !== id);
+  redrawCanvas();
+  updateList();
+}
+
+function clearAll() {
+  annotations = [];
+  redrawCanvas();
+  updateList();
+}
+</script>
+
+</body>
+</html>
