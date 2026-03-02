@@ -23,16 +23,49 @@
 <body>
 
   <h1 id="status">Loading...</h1>
+  <button id="connectBtn">Connect to Arduino</button>
+  <br><br>
   <video id="video" width="640" height="480" autoplay></video>
 
   <script>
     const video = document.getElementById("video");
     const statusText = document.getElementById("status");
+    const connectBtn = document.getElementById("connectBtn");
 
-const faceMesh = new FaceMesh({
-  locateFile: (file) =>
-    `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
-});
+    let port;
+    let writer;
+    let lastState = null; // Prevent repeated sending
+
+    // ---------- CONNECT TO ARDUINO ----------
+    connectBtn.addEventListener("click", async () => {
+      try {
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 9600 });
+
+        const encoder = new TextEncoderStream();
+        encoder.readable.pipeTo(port.writable);
+        writer = encoder.writable.getWriter();
+
+        statusText.innerText = "Connected to Arduino ✅";
+      } catch (err) {
+        alert("Connection failed!");
+        console.error(err);
+      }
+    });
+
+    async function sendToArduino(value) {
+      if (writer && value !== lastState) {
+        await writer.write(value + "\n");
+        lastState = value;
+        console.log("Sent:", value);
+      }
+    }
+
+    // ---------- MEDIAPIPE ----------
+    const faceMesh = new FaceMesh({
+      locateFile: (file) =>
+        `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+    });
 
     faceMesh.setOptions({
       maxNumFaces: 1,
@@ -41,12 +74,11 @@ const faceMesh = new FaceMesh({
       minTrackingConfidence: 0.5
     });
 
-    faceMesh.onResults(results => {
+    faceMesh.onResults(async (results) => {
       if (!results.multiFaceLandmarks) return;
 
       const landmarks = results.multiFaceLandmarks[0];
 
-      // Upper lip & lower lip points
       const upperLip = landmarks[13];
       const lowerLip = landmarks[14];
 
@@ -54,8 +86,10 @@ const faceMesh = new FaceMesh({
 
       if (lipDistance > 0.015) {
         statusText.innerText = "MOUTH OPEN 😮";
+        await sendToArduino("1");
       } else {
         statusText.innerText = "MOUTH CLOSED 🙂";
+        await sendToArduino("0");
       }
     });
 
