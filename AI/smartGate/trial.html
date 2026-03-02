@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Try It Yourself - Smart Toll Gate</title>
+
+  <style>
+    body {
+      font-family: Arial;
+      margin: 0;
+      background: #f1f1f1;
+    }
+
+    h2 {
+      text-align: center;
+      background: #04AA6D;
+      color: white;
+      padding: 15px;
+      margin: 0;
+    }
+
+    .container {
+      display: flex;
+      height: 90vh;
+    }
+
+    .left {
+      width: 50%;
+      padding: 10px;
+      background: #fff;
+      border-right: 2px solid #ccc;
+      box-sizing: border-box;
+    }
+
+    .right {
+      width: 50%;
+      padding: 10px;
+      box-sizing: border-box;
+      background: #fafafa;
+    }
+
+    textarea {
+      width: 100%;
+      height: 75%;
+      font-family: monospace;
+      font-size: 14px;
+      padding: 10px;
+      box-sizing: border-box;
+    }
+
+    button {
+      background: #04AA6D;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+
+    iframe {
+      width: 100%;
+      height: 80%;
+      border: 1px solid #ccc;
+      background: white;
+    }
+  </style>
+</head>
+
+<body>
+
+<h2>Try It Yourself - Smart Toll Gate AI</h2>
+
+<div class="container">
+
+  <!-- LEFT SIDE -->
+  <div class="left">
+    <h3>Edit Code</h3>
+
+    <textarea id="code">
+<!DOCTYPE html>
+<html>
+<head>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.16.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+
+<style>
+  #container {
+    position: relative;
+    display: inline-block;
+  }
+
+  video {
+    width: 400px;
+    border: 2px solid black;
+  }
+
+  canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+</style>
+</head>
+
+<body>
+
+<h3>Smart Toll Gate Demo</h3>
+<button onclick="startCamera()">Start Camera</button>
+<br><br>
+
+<div id="container">
+  <video id="video" autoplay playsinline></video>
+  <canvas id="canvas"></canvas>
+</div>
+
+<p id="status">Loading model...</p>
+
+<script>
+let model;
+
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+async function init() {
+  model = await cocoSsd.load();
+  document.getElementById("status").innerText = "Model Loaded!";
+}
+init();
+
+async function startCamera() {
+  const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+  video.srcObject = stream;
+
+  video.onloadedmetadata = () => {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    detectFrame();
+  };
+}
+
+async function detectFrame() {
+  const predictions = await model.detect(video);
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  predictions.forEach(pred => {
+    if (pred.score > 0.6) {
+      ctx.strokeStyle = "lime";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(...pred.bbox);
+
+      ctx.fillStyle = "lime";
+      ctx.font = "16px Arial";
+      ctx.fillText(
+        pred.class,
+        pred.bbox[0],
+        pred.bbox[1] > 20 ? pred.bbox[1] - 5 : 20
+      );
+    }
+  });
+
+  requestAnimationFrame(detectFrame);
+}
+</script>
+
+</body>
+</html>    
+</textarea>
+
+    <button onclick="runCode()">Run Code</button>
+  </div>
+
+  <!-- RIGHT SIDE -->
+  <div class="right">
+    <h3>Output</h3>
+    <iframe id="output"></iframe>
+  </div>
+
+</div>
+
+<script>
+function runCode() {
+  const code = document.getElementById("code").value;
+  const iframe = document.getElementById("output");
+  iframe.srcdoc = code;
+}
+</script>
+
+</body>
+</html>
