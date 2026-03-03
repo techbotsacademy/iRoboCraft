@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>W3 Try It - Mouth Detection</title>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial;
+      display: flex;
+      height: 100vh;
+    }
+
+    .editor {
+      width: 50%;
+      background: #1e1e1e;
+      color: white;
+      padding: 10px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .editor h2 {
+      margin-top: 0;
+    }
+
+    textarea {
+      flex: 1;
+      width: 100%;
+      background: #111;
+      color: #00ff88;
+      font-family: monospace;
+      font-size: 14px;
+      padding: 10px;
+      border: none;
+      resize: none;
+    }
+
+    button {
+      padding: 12px;
+      background: #04AA6D;
+      color: white;
+      border: none;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    .output {
+      width: 50%;
+      border-left: 4px solid #ccc;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="editor">
+  <h2>Try It Yourself</h2>
+  <textarea id="codeArea">
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Mouth Detection with Debug Legend</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      background: #111;
+      font-family: Arial;
+      text-align: center;
+      color: white;
+    }
+
+    .container {
+      position: relative;
+      display: inline-block;
+    }
+
+    video, canvas {
+      border: 2px solid cyan;
+      border-radius: 10px;
+    }
+
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    /* 🔹 Top Right Legend */
+    .legend {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 15px;
+      border-radius: 10px;
+      text-align: left;
+      font-size: 14px;
+      width: 220px;
+      border: 1px solid #444;
+    }
+
+    .open { color: lime; font-weight: bold; }
+    .closed { color: cyan; font-weight: bold; }
+
+    .red { color: red; }
+    .blue { color: deepskyblue; }
+    .yellow { color: yellow; }
+
+    input {
+      width: 100%;
+    }
+  </style>
+</head>
+
+<body>
+
+<h2>Mouth Open / Close Detection</h2>
+
+<div class="container">
+  <video id="video" width="640" height="480" autoplay></video>
+  <canvas id="canvas" width="640" height="480"></canvas>
+
+  <!-- 🔹 Legend Overlay -->
+  <div class="legend">
+    <div>Status: <span id="status">Initializing...</span></div>
+    <hr>
+    <div class="red">Upper Lip Y: <span id="upperY">-</span></div>
+    <div class="blue">Lower Lip Y: <span id="lowerY">-</span></div>
+    <div class="yellow">Normalized Distance: <span id="normDist">0</span></div>
+    <div>Pixel Distance: <span id="pixelDist">0</span></div>
+    <hr>
+    <div>
+      Threshold:
+      <input type="range" id="threshold" min="0.005" max="0.05" step="0.001" value="0.015">
+      <span id="thresholdVal">0.015</span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+const statusText = document.getElementById("status");
+const upperYText = document.getElementById("upperY");
+const lowerYText = document.getElementById("lowerY");
+const normDistText = document.getElementById("normDist");
+const pixelDistText = document.getElementById("pixelDist");
+
+const thresholdSlider = document.getElementById("threshold");
+const thresholdVal = document.getElementById("thresholdVal");
+
+thresholdVal.innerText = thresholdSlider.value;
+
+thresholdSlider.addEventListener("input", () => {
+  thresholdVal.innerText = thresholdSlider.value;
+});
+
+const faceMesh = new FaceMesh({
+  locateFile: (file) =>
+    `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+});
+
+faceMesh.setOptions({
+  maxNumFaces: 1,
+  refineLandmarks: true,
+  minDetectionConfidence: 0.5,
+  minTrackingConfidence: 0.5
+});
+
+faceMesh.onResults((results) => {
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (!results.multiFaceLandmarks) {
+    statusText.innerText = "No face detected";
+    return;
+  }
+
+  const landmarks = results.multiFaceLandmarks[0];
+
+  const upperLip = landmarks[13];
+  const lowerLip = landmarks[14];
+
+  const upperX = upperLip.x * canvas.width;
+  const upperY = upperLip.y * canvas.height;
+  const lowerX = lowerLip.x * canvas.width;
+  const lowerY = lowerLip.y * canvas.height;
+
+  const normalizedDistance = Math.abs(upperLip.y - lowerLip.y);
+  const pixelDistance = Math.abs(upperY - lowerY);
+
+  // Update legend
+  upperYText.innerText = upperLip.y.toFixed(4);
+  lowerYText.innerText = lowerLip.y.toFixed(4);
+  normDistText.innerText = normalizedDistance.toFixed(4);
+  pixelDistText.innerText = pixelDistance.toFixed(2);
+
+  const threshold = parseFloat(thresholdSlider.value);
+
+  // Draw Upper Lip (Red)
+  ctx.fillStyle = "red";
+  ctx.beginPath();
+  ctx.arc(upperX, upperY, 7, 0, 2 * Math.PI);
+  ctx.fill();
+
+  // Draw Lower Lip (Blue)
+  ctx.fillStyle = "deepskyblue";
+  ctx.beginPath();
+  ctx.arc(lowerX, lowerY, 7, 0, 2 * Math.PI);
+  ctx.fill();
+
+  // Draw Line (Yellow)
+  ctx.strokeStyle = "yellow";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(upperX, upperY);
+  ctx.lineTo(lowerX, lowerY);
+  ctx.stroke();
+
+  if (normalizedDistance > threshold) {
+    statusText.innerText = "MOUTH OPEN 😮";
+    statusText.className = "open";
+  } else {
+    statusText.innerText = "MOUTH CLOSED 🙂";
+    statusText.className = "closed";
+  }
+
+});
+
+const camera = new Camera(video, {
+  onFrame: async () => {
+    await faceMesh.send({ image: video });
+  },
+  width: 640,
+  height: 480
+});
+
+camera.start();
+
+</script>
+
+</body>
+</html>
+  </textarea>
+
+  <button onclick="runCode()">Run Code ▶</button>
+</div>
+
+<div class="output">
+  <iframe id="outputFrame"></iframe>
+</div>
+
+<script>
+function runCode() {
+  const code = document.getElementById("codeArea").value;
+  const iframe = document.getElementById("outputFrame");
+  iframe.srcdoc = code;
+}
+
+// Load automatically on first open
+runCode();
+</script>
+
+</body>
+</html>

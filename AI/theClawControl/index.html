@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Gesture Controlled Robotic Claw</title>
+
+  <style>
+    body {
+      text-align: center;
+      font-family: Arial;
+      background: #f2f2f2;
+    }
+
+    #container {
+      position: relative;
+      display: inline-block;
+    }
+
+    video, canvas {
+      position: absolute;
+      left: 0;
+      top: 0;
+    }
+
+    canvas {
+      pointer-events: none;
+    }
+
+    h2 {
+      margin-top: 20px;
+    }
+
+    #status {
+      margin-top: 500px;
+      font-size: 20px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+
+<h2>🖐 Gesture Controlled 2-Finger Robotic Claw</h2>
+<p>Pinch fingers to close. Open fingers to open claw.</p>
+
+<div id="container">
+  <video id="webcam" autoplay playsinline width="640" height="480"></video>
+  <canvas id="output" width="640" height="480"></canvas>
+</div>
+
+<div id="status">Servo Angle: --</div>
+
+<script type="module">
+import {
+  HandLandmarker,
+  FilesetResolver
+} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest";
+
+const video = document.getElementById("webcam");
+const canvas = document.getElementById("output");
+const ctx = canvas.getContext("2d");
+const statusText = document.getElementById("status");
+
+let handLandmarker;
+let lastAngleSent = -1;
+
+// 🔢 Distance calculation
+function calculateDistance(p1, p2) {
+  return Math.sqrt(
+    Math.pow(p1.x - p2.x, 2) +
+    Math.pow(p1.y - p2.y, 2)
+  );
+}
+
+// 🔄 Map value
+function mapRange(value, inMin, inMax, outMin, outMax) {
+  return (
+    ((value - inMin) * (outMax - outMin)) /
+    (inMax - inMin) +
+    outMin
+  );
+}
+
+// 🎥 Setup webcam
+async function setupCamera() {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { width: 640, height: 480 }
+  });
+  video.srcObject = stream;
+
+  return new Promise((resolve) => {
+    video.onloadedmetadata = () => resolve(video);
+  });
+}
+
+// 🤖 Load MediaPipe
+async function createHandLandmarker() {
+  const vision = await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+  );
+
+  handLandmarker = await HandLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath:
+        "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
+    },
+    runningMode: "VIDEO",
+    numHands: 1
+  });
+}
+
+// 🖐 Draw landmarks + control claw
+function processHand(landmarks) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const thumbTip = landmarks[4];
+  const indexTip = landmarks[8];
+
+  // Calculate pinch distance
+  const distance = calculateDistance(thumbTip, indexTip);
+
+  // Map distance to servo angle (adjust range if needed)
+  let servoAngle = mapRange(distance, 0.02, 0.25, 0, 180);
+
+  // Clamp values
+  servoAngle = Math.max(0, Math.min(180, servoAngle));
+  servoAngle = Math.round(servoAngle);
+
+  statusText.innerText = "Servo Angle: " + servoAngle;
+
+  // Send only if changed (reduces network spam)
+  if (servoAngle !== lastAngleSent) {
+    fetch(`http://192.168.1.100/servo?angle=${servoAngle}`)
+      .catch(() => {});
+    lastAngleSent = servoAngle;
+  }
+
+  // Draw all 21 landmarks
+  for (const point of landmarks) {
+    ctx.beginPath();
+    ctx.arc(point.x * canvas.width,
+            point.y * canvas.height,
+            5, 0, 2 * Math.PI);
+    ctx.fillStyle = "lime";
+    ctx.fill();
+  }
+
+  // Draw line between thumb and index
+  ctx.beginPath();
+  ctx.moveTo(thumbTip.x * canvas.width,
+             thumbTip.y * canvas.height);
+  ctx.lineTo(indexTip.x * canvas.width,
+             indexTip.y * canvas.height);
+  ctx.strokeStyle = "red";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+}
+
+// 🔁 Real-time detection loop
+async function predictWebcam() {
+  const results = handLandmarker.detectForVideo(video, Date.now());
+
+  if (results.landmarks && results.landmarks.length > 0) {
+    processHand(results.landmarks[0]);
+  } else {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  requestAnimationFrame(predictWebcam);
+}
+
+// 🚀 Initialize everything
+async function init() {
+  await setupCamera();
+  await createHandLandmarker();
+  video.play();
+  predictWebcam();
+}
+
+init();
+
+</script>
+
+</body>
+</html>
