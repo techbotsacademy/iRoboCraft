@@ -55,9 +55,9 @@
 
     async function sendToArduino(value) {
       if (writer && value !== lastState) {
-        await writer.write(value + "\n");
+        await writer.write(value);
         lastState = value;
-        console.log("Sent:", value);
+        console.log("Sent:", value+ "\n");
       }
     }
 
