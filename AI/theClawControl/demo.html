@@ -104,24 +104,20 @@ import {
   FilesetResolver
 } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest";
 
-
 const video = document.getElementById("webcam");
 const canvas = document.getElementById("output");
 const ctx = canvas.getContext("2d");
 const statusText = document.getElementById("status");
 const connectBtn = document.getElementById("connectBtn");
 
-
 let handLandmarker;
 let lastAngle = -1;
 let lastSentTime = 0;
-const sendDelay = 80; // ms delay for stable serial
-
+const sendDelay = 80;
 
 // SERIAL
 let port;
 let writer;
-
 
 connectBtn.addEventListener("click", async () => {
   try {
@@ -134,24 +130,14 @@ connectBtn.addEventListener("click", async () => {
   }
 });
 
-
 async function sendAngle(angle) {
   if (!writer) return;
-
-
   const now = Date.now();
   if (now - lastSentTime < sendDelay) return;
-
-
-  try {
-    const data = new TextEncoder().encode(angle + "\n");
-    await writer.write(data);
-    lastSentTime = now;
-  } catch (err) {
-    console.log("Serial Write Error:", err);
-  }
+  const data = new TextEncoder().encode(angle + "\n");
+  await writer.write(data);
+  lastSentTime = now;
 }
-
 
 // CAMERA
 async function setupCamera() {
@@ -162,13 +148,11 @@ async function setupCamera() {
   });
 }
 
-
 // LOAD MODEL
 async function createHandLandmarker() {
   const vision = await FilesetResolver.forVisionTasks(
     "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
   );
-
 
   handLandmarker = await HandLandmarker.createFromOptions(vision, {
     baseOptions: {
@@ -180,8 +164,6 @@ async function createHandLandmarker() {
   });
 }
 
-
-// DISTANCE
 function calculateDistance(p1, p2) {
   return Math.sqrt(
     (p1.x - p2.x) ** 2 +
@@ -189,67 +171,63 @@ function calculateDistance(p1, p2) {
   );
 }
 
-
-// MAIN
 function drawLandmarks(landmarks) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-
   for (const hand of landmarks) {
-
 
     const thumbTip = hand[4];
     const indexTip = hand[8];
     const wrist = hand[0];
     const middleMCP = hand[9];
 
-
     const palmSize = calculateDistance(wrist, middleMCP);
     const fingerDistance = calculateDistance(thumbTip, indexTip);
 
-
     let normalized = fingerDistance / palmSize;
     normalized = Math.max(0.1, Math.min(0.8, normalized));
-
 
     let servoAngle = Math.round(
       ((normalized - 0.1) / (0.8 - 0.1)) * 180
     );
 
-
     servoAngle = Math.max(0, Math.min(180, servoAngle));
-
-
-    // SNAP ZONES
-    if (servoAngle <= 10) servoAngle = 0;
-    else if (servoAngle >= 40 && servoAngle <= 50) servoAngle = 45;
-    else if (servoAngle >= 85 && servoAngle <= 95) servoAngle = 90;
-    else if (servoAngle >= 170) servoAngle = 180;
-
 
     statusText.innerText = "Servo Angle: " + servoAngle;
 
-
-    // SEND ONLY IF CHANGE >= 5
     if (Math.abs(servoAngle - lastAngle) >= 5) {
       sendAngle(servoAngle);
       lastAngle = servoAngle;
     }
 
+    // ===== DRAW ONLY RELEVANT POINTS =====
 
-    // DRAW POINTS
-    for (const point of hand) {
+    function drawPoint(point, color) {
       ctx.beginPath();
       ctx.arc(point.x * canvas.width,
               point.y * canvas.height,
-              5, 0, 2 * Math.PI);
-      ctx.fillStyle = "lime";
+              8, 0, 2 * Math.PI);
+      ctx.fillStyle = color;
       ctx.fill();
     }
 
+    drawPoint(wrist, "blue");
+    drawPoint(middleMCP, "yellow");
+    drawPoint(thumbTip, "purple");
+    drawPoint(indexTip, "red");
 
-    // DRAW LINE
+    // Palm reference line
+    ctx.beginPath();
+    ctx.moveTo(wrist.x * canvas.width,
+               wrist.y * canvas.height);
+    ctx.lineTo(middleMCP.x * canvas.width,
+               middleMCP.y * canvas.height);
+    ctx.strokeStyle = "cyan";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Finger distance line
     ctx.beginPath();
     ctx.moveTo(thumbTip.x * canvas.width,
                thumbTip.y * canvas.height);
@@ -258,35 +236,39 @@ function drawLandmarks(landmarks) {
     ctx.strokeStyle = "red";
     ctx.lineWidth = 4;
     ctx.stroke();
+
+    // ===== LEGEND PANEL =====
+    ctx.fillStyle = "rgba(0,0,0,0.7)";
+    ctx.fillRect(canvas.width - 260, 10, 250, 140);
+
+    ctx.fillStyle = "white";
+    ctx.font = "14px Arial";
+    ctx.fillText("Palm Size: " + palmSize.toFixed(3), canvas.width - 250, 35);
+    ctx.fillText("Finger Distance: " + fingerDistance.toFixed(3), canvas.width - 250, 55);
+    ctx.fillText("Normalized: " + normalized.toFixed(3), canvas.width - 250, 75);
+    ctx.fillText("Servo Angle: " + servoAngle + "°", canvas.width - 250, 95);
   }
 }
 
-
-// LOOP
 async function predictWebcam() {
   const results = handLandmarker.detectForVideo(
     video,
     performance.now()
   );
 
-
   if (results.landmarks) {
     drawLandmarks(results.landmarks);
   }
 
-
   requestAnimationFrame(predictWebcam);
 }
 
-
-// INIT
 async function init() {
   await setupCamera();
   await createHandLandmarker();
   video.play();
   predictWebcam();
 }
-
 
 init();
 </script>
