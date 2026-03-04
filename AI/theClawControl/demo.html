@@ -193,9 +193,6 @@ function drawLandmarks(landmarks) {
     );
 
     servoAngle = Math.max(0, Math.min(180, servoAngle));
-
-    statusText.innerText = "Servo Angle: " + servoAngle;
-
     if (Math.abs(servoAngle - lastAngle) >= 5) {
       sendAngle(servoAngle);
       lastAngle = servoAngle;
