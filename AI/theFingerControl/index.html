@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Finger LED Control</title>
+</head>
+<body>
+
+  <h2>Finger Control LED (Arduino Uno)</h2>
+  <button onclick="connectArduino()">Connect Arduino</button>
+  <br><br>
+
+  <video id="video" width="640" height="480" autoplay playsinline></video>
+
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+<script>
+  let port;
+  let writer = null;   // Start as null
+  let lastSent = -1;
+
+  async function connectArduino() {
+    try {
+      port = await navigator.serial.requestPort();
+      await port.open({ baudRate: 9600 });
+      writer = port.writable.getWriter();
+      alert("Arduino Connected ✅");
+    } catch (err) {
+      alert("Connection failed ❌");
+    }
+  }
+
+  const videoElement = document.getElementById('video');
+
+  // Show finger count on screen
+  const countDisplay = document.createElement("h3");
+  countDisplay.innerText = "Fingers: 0";
+  document.body.appendChild(countDisplay);
+
+  const hands = new Hands({
+    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+  });
+
+  hands.setOptions({
+    maxNumHands: 1,
+    modelComplexity: 1,
+    minDetectionConfidence: 0.8,
+    minTrackingConfidence: 0.8
+  });
+
+  function countFingers(landmarks) {
+    let count = 0;
+
+    const isRightHand = landmarks[17].x < landmarks[5].x;
+
+    // Thumb
+    if (isRightHand) {
+      if (landmarks[4].x > landmarks[3].x) count++;
+    } else {
+      if (landmarks[4].x < landmarks[3].x) count++;
+    }
+
+    // Other fingers
+    const fingers = [8, 12, 16, 20];
+    const pip = [6, 10, 14, 18];
+
+    for (let i = 0; i < fingers.length; i++) {
+      if (landmarks[fingers[i]].y < landmarks[pip[i]].y) count++;
+    }
+
+    return count;
+  }
+
+  hands.onResults(async (results) => {
+
+    let fingerCount = 0;
+
+    if (results.multiHandLandmarks &&
+        results.multiHandLandmarks.length > 0) {
+
+      fingerCount = countFingers(results.multiHandLandmarks[0]);
+    }
+
+    // Always display
+    countDisplay.innerText = "Fingers: " + fingerCount;
+    console.log("Fingers Detected:", fingerCount);
+
+    // Only send if Arduino connected
+    if (writer && fingerCount !== lastSent) {
+      const data = new TextEncoder().encode(fingerCount + "\n");
+      await writer.write(data);
+      lastSent = fingerCount;
+    }
+  });
+
+  const camera = new Camera(videoElement, {
+    onFrame: async () => {
+      await hands.send({ image: videoElement });
+    },
+    width: 640,
+    height: 480
+  });
+
+  camera.start();
+</script>
+</body>
+</html>

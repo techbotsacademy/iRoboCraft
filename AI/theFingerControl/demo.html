@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Try It Editor with Line Numbers</title>
+
+  <style>
+    body {
+      font-family: Arial;
+      margin: 0;
+      background: #f1f1f1;
+    }
+
+    h2 {
+      text-align: center;
+      padding: 10px;
+      background: #04AA6D;
+      color: white;
+      margin: 0;
+    }
+
+    #mainContainer {
+      display: flex;
+      height: 90vh;
+    }
+
+    /* LEFT SIDE - CODE EDITOR */
+    #editorContainer {
+      display: flex;
+      width: 50%;
+      border-right: 2px solid #ccc;
+      background: white;
+      font-family: monospace;
+    }
+
+    #lineNumbers {
+      background: #f4f4f4;
+      color: #888;
+      padding: 10px 5px;
+      text-align: right;
+      user-select: none;
+      overflow: hidden;
+      font-size: 14px;
+      line-height: 20px;
+    }
+
+    #codeArea {
+      flex: 1;
+      border: none;
+      outline: none;
+      resize: none;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 14px;
+      line-height: 20px;
+      overflow: auto;
+    }
+
+    /* RIGHT SIDE - OUTPUT */
+    #outputContainer {
+      width: 50%;
+      background: white;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #runBtn {
+      padding: 10px;
+      border: none;
+      background: #04AA6D;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    #runBtn:hover {
+      background: #038e5d;
+    }
+
+    iframe {
+      flex: 1;
+      border: none;
+    }
+  </style>
+</head>
+
+<body>
+
+<h2>W3Schools Style Try-It Editor</h2>
+
+<div id="mainContainer">
+
+  <!-- LEFT SIDE -->
+  <div id="editorContainer">
+    <pre id="lineNumbers">1</pre>
+    <textarea id="codeArea">
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Finger LED Control - Advanced Legends</title>
+  <style>
+    body { font-family: Arial; text-align: center; }
+
+    #container {
+      position: relative;
+      display: inline-block;
+    }
+
+    canvas {
+      position: absolute;
+      left: 0;
+      top: 0;
+    }
+
+    #legendBox {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(0,0,0,0.85);
+      color: white;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      text-align: left;
+      width: 320px;
+      max-height: 440px;
+      overflow-y: auto;
+    }
+
+    select {
+      padding: 6px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+
+<h2>Finger Control LED (Structured Learning Mode)</h2>
+
+<select id="modeSelect">
+  <option value="positions">1. Finger Positions (Static)</option>
+  <option value="landmarks">2. Live 21 Landmark Coordinates</option>
+  <option value="handtype">3. Detect Left or Right Hand</option>
+  <option value="thumb">4. Thumb Logic</option>
+  <option value="openclose">5. Open/Close Finger Calculation</option>
+</select>
+
+<br><br>
+
+<div id="container">
+  <video id="video" width="640" height="480" autoplay playsinline></video>
+  <canvas id="canvas" width="640" height="480"></canvas>
+  <div id="legendBox">Waiting for hand...</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+<script>
+const videoElement = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const legendBox = document.getElementById("legendBox");
+const modeSelect = document.getElementById("modeSelect");
+
+function drawPoint(pt, color="red") {
+  ctx.beginPath();
+  ctx.arc(pt.x * canvas.width, pt.y * canvas.height, 6, 0, 2 * Math.PI);
+  ctx.fillStyle = color;
+  ctx.fill();
+}
+
+function drawLine(p1, p2, color="white") {
+  ctx.beginPath();
+  ctx.moveTo(p1.x * canvas.width, p1.y * canvas.height);
+  ctx.lineTo(p2.x * canvas.width, p2.y * canvas.height);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+function f(num) { return num.toFixed(3); }
+
+const hands = new Hands({
+  locateFile: (file) =>
+    `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+});
+
+hands.setOptions({
+  maxNumHands: 1,
+  modelComplexity: 1,
+  minDetectionConfidence: 0.8,
+  minTrackingConfidence: 0.8
+});
+
+hands.onResults((results) => {
+    let previousLandmarks = null;
+    const movementThreshold = 0.02; // You can adjust (0.01 = sensitive, 0.05 = less sensitive)
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  if (!results.multiHandLandmarks ||
+      results.multiHandLandmarks.length === 0) {
+    legendBox.innerHTML = "No hand detected";
+    return;
+  }
+
+  const landmarks = results.multiHandLandmarks[0];
+  const mode = modeSelect.value;
+
+  const isRightHand = landmarks[17].x < landmarks[5].x;
+
+  // --------------------------------------------------
+  // 1️⃣ STATIC FINGER POSITIONS (UNCHANGED)
+  // --------------------------------------------------
+  if (mode === "positions") {
+
+    legendBox.innerHTML =
+      "<b>Finger Positions</b><br>" +
+      "0: Wrist<br>" +
+      "1-4: Thumb<br>" +
+      "5-8: Index<br>" +
+      "9-12: Middle<br>" +
+      "13-16: Ring<br>" +
+      "17-20: Pinky";
+
+    landmarks.forEach(pt => drawPoint(pt, "red"));
+  }
+
+  // --------------------------------------------------
+  // 2️⃣ LIVE 21 LANDMARK COORDINATES (NEW MODE)
+  // --------------------------------------------------
+if (mode === "landmarks") {
+
+  let html = "<b>Live 21 Landmark Coordinates</b><br>";
+  html += "Highlight = Movement > " + movementThreshold + "<br><br>";
+
+  landmarks.forEach((pt, i) => {
+
+    let highlight = false;
+
+    if (previousLandmarks) {
+
+      const prev = previousLandmarks[i];
+
+      const dx = pt.x - prev.x;
+      const dy = pt.y - prev.y;
+
+      const delta = Math.sqrt(dx * dx + dy * dy);
+
+      if (delta > movementThreshold) {
+        highlight = true;
+      }
+    }
+
+    const color = highlight ? "#00FF00" : "white";
+
+    html += `<span style="color:${color}">
+      Point ${i}: x=${f(pt.x)} | y=${f(pt.y)}
+    </span><br>`;
+
+    drawPoint(pt, highlight ? "lime" : "red");
+  });
+
+  legendBox.innerHTML = html;
+
+  // Save current frame for next comparison
+  previousLandmarks = JSON.parse(JSON.stringify(landmarks));
+}
+  // --------------------------------------------------
+  // 3️⃣ LEFT / RIGHT DETECTION (UNCHANGED LOGIC)
+  // --------------------------------------------------
+  if (mode === "handtype") {
+
+    const p17 = landmarks[17];
+    const p5 = landmarks[5];
+
+    drawPoint(p17, "blue");
+    drawPoint(p5, "green");
+    drawLine(p17, p5);
+
+    const result = p17.x < p5.x;
+
+    legendBox.innerHTML =
+      "<b>Left / Right Detection</b><br><br>" +
+      `17.x = ${f(p17.x)}<br>` +
+      `5.x = ${f(p5.x)}<br><br>` +
+      `${f(p17.x)} < ${f(p5.x)} → ${result}<br><br>` +
+      "Detected: <b>" + (result ? "Right Hand" : "Left Hand") + "</b>";
+  }
+
+  // --------------------------------------------------
+  // 4️⃣ THUMB LOGIC (EXPRESSION + RESULT)
+  // --------------------------------------------------
+  if (mode === "thumb") {
+
+    const tip = landmarks[4];
+    const joint = landmarks[3];
+
+    drawPoint(tip, "orange");
+    drawPoint(joint, "yellow");
+    drawLine(tip, joint);
+
+    let expression;
+    let numericExpression;
+    let result;
+
+    if (isRightHand) {
+      expression = "tip.x > joint.x";
+      numericExpression = `${f(tip.x)} > ${f(joint.x)}`;
+      result = tip.x > joint.x;
+    } else {
+      expression = "tip.x < joint.x";
+      numericExpression = `${f(tip.x)} < ${f(joint.x)}`;
+      result = tip.x < joint.x;
+    }
+
+    legendBox.innerHTML =
+      "<b>Thumb Logic</b><br><br>" +
+      "Hand Type: <b>" + (isRightHand ? "Right" : "Left") + "</b><br><br>" +
+      "Expression:<br>" + expression + "<br><br>" +
+      "Substituted:<br>" + numericExpression + "<br><br>" +
+      "Result:<br><b>" + result + "</b><br><br>" +
+      "Thumb is: <b>" + (result ? "OPEN" : "CLOSED") + "</b>";
+  }
+
+  // --------------------------------------------------
+  // 5️⃣ OPEN / CLOSE FINGERS (UNCHANGED)
+  // --------------------------------------------------
+  if (mode === "openclose") {
+
+    const fingers = [8, 12, 16, 20];
+    const pip = [6, 10, 14, 18];
+    const names = ["Index", "Middle", "Ring", "Pinky"];
+
+    let html = "<b>Open / Close Calculation</b><br><br>";
+
+    for (let i = 0; i < fingers.length; i++) {
+
+      const tip = landmarks[fingers[i]];
+      const joint = landmarks[pip[i]];
+
+      drawPoint(tip, "red");
+      drawPoint(joint, "blue");
+      drawLine(tip, joint);
+
+      const open = tip.y < joint.y;
+
+      html += `<b>${names[i]}</b><br>`;
+      html += `Tip.y = ${f(tip.y)}<br>`;
+      html += `Joint.y = ${f(joint.y)}<br>`;
+      html += `${f(tip.y)} < ${f(joint.y)} → ${open}<br><br>`;
+    }
+
+    legendBox.innerHTML = html;
+  }
+
+});
+
+const camera = new Camera(videoElement, {
+  onFrame: async () => {
+    await hands.send({ image: videoElement });
+  },
+  width: 640,
+  height: 480
+});
+
+camera.start();
+</script>
+</body>
+</html>
+    </textarea>
+  </div>
+
+  <!-- RIGHT SIDE -->
+  <div id="outputContainer">
+    <button id="runBtn" onclick="runCode()">Run ▶</button>
+    <iframe id="outputFrame"></iframe>
+  </div>
+
+</div>
+
+<script>
+const codeArea = document.getElementById("codeArea");
+const lineNumbers = document.getElementById("lineNumbers");
+const outputFrame = document.getElementById("outputFrame");
+
+/* Update Line Numbers */
+function updateLineNumbers() {
+  const lines = codeArea.value.split("\n").length;
+  let numbers = "";
+  for (let i = 1; i <= lines; i++) {
+    numbers += i + "\n";
+  }
+  lineNumbers.textContent = numbers;
+}
+
+/* Sync Scroll */
+codeArea.addEventListener("scroll", () => {
+  lineNumbers.scrollTop = codeArea.scrollTop;
+});
+
+/* Update on typing */
+codeArea.addEventListener("input", updateLineNumbers);
+
+/* Run Code in iframe */
+function runCode() {
+  const code = codeArea.value;
+  outputFrame.srcdoc = code;
+}
+
+/* Initialize */
+updateLineNumbers();
+runCode();
+</script>
+
+</body>
+</html>
