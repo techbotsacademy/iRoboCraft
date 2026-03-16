@@ -17,12 +17,9 @@ void loop() {
 
   if (flexValue > 500) {
     myServo.write(135);   // Rotate servo to 45 degrees
-  delay(1000);
-
   } 
   else {
     myServo.write(0);    // Rotate servo to 0 degrees
-  delay(1000);
   }
 
 }
