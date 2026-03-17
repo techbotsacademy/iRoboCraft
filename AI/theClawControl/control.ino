@@ -10,7 +10,8 @@ void setup() {
 
 void loop() {
   if (Serial.available() > 0) {
-    angle = Serial.parseInt();   // Read angle from serial
+    String input = Serial.readStringUntil('\n'); // Read full line
+    angle = input.toInt(); // Convert to number    
     if (angle >= 0 && angle <= 180) {
       myServo.write(angle);      // Rotate servo
     }
