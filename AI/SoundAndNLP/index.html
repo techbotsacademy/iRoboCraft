@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voice Control Demo</title>
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial;
+  display: flex;
+  height: 100vh;
+}
+
+.left, .right {
+  width: 50%;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+textarea {
+  width: 100%;
+  height: 90%;
+  background: #111;
+  color: #0f0;
+  font-family: monospace;
+  padding: 10px;
+}
+
+button {
+  width: 100%;
+  padding: 10px;
+  font-size: 16px;
+  margin-top: 5px;
+  cursor: pointer;
+}
+
+iframe {
+  width: 100%;
+  height: 90%;
+  border: none;
+}
+</style>
+</head>
+
+<body>
+
+<div class="left">
+<textarea id="code">
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body { 
+  background:#111; 
+  color:white; 
+  text-align:center; 
+  font-family:Arial; 
+}
+
+.mic { 
+  font-size:40px; 
+  cursor:pointer; 
+  margin:20px; 
+}
+
+.options {
+  display:flex;
+  justify-content:space-around;
+  margin-top:20px;
+  color:#aaa;
+}
+
+.options div {
+  border:1px solid #333;
+  padding:6px 10px;
+  border-radius:8px;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Car Voice Assistant</h2>
+<div id="status">Waiting...</div>
+
+<div class="mic" onclick="start()">🎤</div>
+
+<div id="output"></div>
+
+<div class="options">
+  <div>📞 Phone</div>
+  <div>📻 Radio</div>
+  <div>🧭 Maps</div>
+  <div>🎵 Music</div>
+</div>
+
+<script>
+const statusEl = document.getElementById("status");
+const output = document.getElementById("output");
+
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const recognition = new SpeechRecognition();
+
+recognition.lang = "en-IN";
+
+function start(){
+  recognition.start();
+  statusEl.innerText = "Listening...";
+}
+
+recognition.onresult = function(e){
+  const text = e.results[0][0].transcript.toLowerCase();
+  output.innerText = "You said: " + text;
+
+  process(text);
+
+  setTimeout(()=>{
+    statusEl.innerText = "Waiting...";
+    output.innerText = "";
+  },2000);
+};
+
+function process(text){
+
+  // 📞 PHONE
+  if(text.startsWith("call")){
+    let name = text.replace("call","").trim();
+    output.innerText = "📞 Calling " + name;
+  }
+
+  // 📻 RADIO
+  else if(text.includes("fm") || text.includes("radio")){
+    let num = text.match(/\\d+(\\.\\d+)?/);
+    if(num) output.innerText = "📻 Tuning to " + num[0] + " FM";
+    else output.innerText = "📻 Which channel?";
+  }
+
+  // 🧭 MAPS
+  else if(text.includes("go from") && text.includes("to")){
+    let parts = text.split("to");
+    let from = parts[0].replace("go from","").trim();
+    let to = parts[1].trim();
+    output.innerText = "🧭 " + from + " → " + to;
+  }
+
+  // 🎵 MUSIC
+  else if(text.includes("play music")){
+    output.innerText = "🎵 Playing Music";
+  }
+
+  // ❌ UNKNOWN
+  else{
+    output.innerText = "❌ I didn't get that";
+  }
+}
+</script>
+
+</body>
+</html>
+</textarea>
+
+<button onclick="runCode()">▶ Run Code</button>
+</div>
+
+<div class="right">
+  <iframe id="outputFrame"></iframe>
+</div>
+
+<script>
+function runCode() {
+  const code = document.getElementById("code").value;
+  document.getElementById("outputFrame").srcdoc = code;
+}
+</script>
+
+</body>
+</html>
