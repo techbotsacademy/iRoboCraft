@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Home Voice Control</title>
+
+<style>
+body {
+  background:#111;
+  color:white;
+  text-align:center;
+  font-family:Arial;
+}
+
+.mic {
+  font-size:50px;
+  margin:20px;
+  cursor:pointer;
+}
+
+.button {
+  margin:10px;
+  padding:10px 20px;
+  border:1px solid #444;
+  display:inline-block;
+  border-radius:10px;
+}
+
+.on { color:lightgreen; }
+.off { color:red; }
+</style>
+</head>
+
+<body>
+
+<h2>🏠 Home Voice Control</h2>
+
+<button onclick="connect()">🔌 Connect to Arduino</button>
+
+<div class="mic" onclick="start()">🎤</div>
+
+<h3 id="status">Waiting...</h3>
+
+<div>
+  <div id="lightStatus" class="button">💡 Light OFF</div>
+</div>
+
+<script>
+let port;
+let writer;
+
+async function connect(){
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 9600 });
+
+    writer = port.writable.getWriter();
+
+    document.getElementById("status").innerText = "Connected to Arduino ✅";
+  } catch(e){
+    console.log(e);
+  }
+}
+
+// SEND DATA TO ARDUINO
+async function send(data){
+  const encoder = new TextEncoder();
+  await writer.write(encoder.encode(data + "\\n"));
+}
+
+// SPEECH
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const recognition = new SpeechRecognition();
+recognition.lang = "en-IN";
+
+function start(){
+  recognition.start();
+  document.getElementById("status").innerText = "Listening...";
+}
+
+recognition.onresult = function(e){
+  const text = e.results[0][0].transcript.toLowerCase();
+  document.getElementById("status").innerText = "You said: " + text;
+
+  process(text);
+
+  setTimeout(()=>{
+    document.getElementById("status").innerText = "Waiting...";
+  },2000);
+};
+
+// PROCESS COMMAND
+function process(text){
+
+  if(text.includes("light on")){
+    document.getElementById("lightStatus").innerText = "💡 Light ON";
+    document.getElementById("lightStatus").className = "button on";
+    send("ON");
+  }
+
+  else if(text.includes("light off")){
+    document.getElementById("lightStatus").innerText = "💡 Light OFF";
+    document.getElementById("lightStatus").className = "button off";
+    send("OFF");
+  }
+
+  else{
+    document.getElementById("status").innerText = "❌ I didn’t get that";
+  }
+}
+</script>
+
+</body>
+</html>
