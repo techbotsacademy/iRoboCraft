@@ -1,9 +1,56 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Home Voice Control</title>
+<title>Home Voice Control (Arduino)</title>
 
+<style>
+body {
+  margin: 0;
+  font-family: Arial;
+  display: flex;
+  height: 100vh;
+}
+
+.left, .right {
+  width: 50%;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+textarea {
+  width: 100%;
+  height: 90%;
+  background: #111;
+  color: #0f0;
+  font-family: monospace;
+  padding: 10px;
+}
+
+button {
+  width: 100%;
+  padding: 10px;
+  margin-top: 5px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+iframe {
+  width: 100%;
+  height: 90%;
+  border: none;
+}
+</style>
+</head>
+
+<body>
+
+<!-- LEFT PANEL -->
+<div class="left">
+<textarea id="code">
+<!DOCTYPE html>
+<html>
+<head>
 <style>
 body {
   background:#111;
@@ -18,12 +65,12 @@ body {
   cursor:pointer;
 }
 
-.button {
-  margin:10px;
+.btn {
   padding:10px 20px;
+  border-radius:10px;
   border:1px solid #444;
   display:inline-block;
-  border-radius:10px;
+  margin-top:20px;
 }
 
 .on { color:lightgreen; }
@@ -35,35 +82,34 @@ body {
 
 <h2>🏠 Home Voice Control</h2>
 
-<button onclick="connect()">🔌 Connect to Arduino</button>
+<button onclick="connect()">🔌 Connect Arduino</button>
 
 <div class="mic" onclick="start()">🎤</div>
 
 <h3 id="status">Waiting...</h3>
 
-<div>
-  <div id="lightStatus" class="button">💡 Light OFF</div>
-</div>
+<div id="light" class="btn off">💡 Light OFF</div>
 
 <script>
 let port;
 let writer;
 
+// CONNECT TO ARDUINO
 async function connect(){
-  try {
+  try{
     port = await navigator.serial.requestPort();
-    await port.open({ baudRate: 9600 });
-
+    await port.open({ baudRate:9600 });
     writer = port.writable.getWriter();
 
-    document.getElementById("status").innerText = "Connected to Arduino ✅";
-  } catch(e){
+    document.getElementById("status").innerText = "Connected ✅";
+  }catch(e){
     console.log(e);
   }
 }
 
-// SEND DATA TO ARDUINO
+// SEND DATA
 async function send(data){
+  if(!writer) return;
   const encoder = new TextEncoder();
   await writer.write(encoder.encode(data + "\\n"));
 }
@@ -93,20 +139,39 @@ recognition.onresult = function(e){
 function process(text){
 
   if(text.includes("light on")){
-    document.getElementById("lightStatus").innerText = "💡 Light ON";
-    document.getElementById("lightStatus").className = "button on";
+    document.getElementById("light").innerText = "💡 Light ON";
+    document.getElementById("light").className = "btn on";
     send("ON");
   }
 
   else if(text.includes("light off")){
-    document.getElementById("lightStatus").innerText = "💡 Light OFF";
-    document.getElementById("lightStatus").className = "button off";
+    document.getElementById("light").innerText = "💡 Light OFF";
+    document.getElementById("light").className = "btn off";
     send("OFF");
   }
 
   else{
     document.getElementById("status").innerText = "❌ I didn’t get that";
   }
+}
+</script>
+
+</body>
+</html>
+</textarea>
+
+<button onclick="runCode()">▶ Run Code</button>
+</div>
+
+<!-- RIGHT PANEL -->
+<div class="right">
+  <iframe id="frame"></iframe>
+</div>
+
+<script>
+function runCode(){
+  document.getElementById("frame").srcdoc =
+    document.getElementById("code").value;
 }
 </script>
 
