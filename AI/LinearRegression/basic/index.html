@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Smart Hoops ML</title>
+  <style>
+    body { font-family: Arial; }
+    canvas { border:2px solid #333; background:#dff0d8; }
+  </style>
+</head>
+<body>
+
+<div style="display:flex; gap:20px; justify-content:center;">
+
+  <!-- GAME -->
+  <div>
+    <h2>🏀 Smart Hoops ML</h2>
+    <p>Click to place ball → Drag red stick → Shoot</p>
+
+    <canvas id="game" width="800" height="450"></canvas>
+
+    <br><br>
+
+    Power: <input type="range" id="power" min="1" max="30" value="10">
+
+    <br><br>
+
+    <button onclick="shoot()">🎯 Shoot</button>
+    <button onclick="predictShot()">🤖 AI Predict</button>
+  </div>
+
+  <!-- DATA PANEL -->
+  <div style="width:300px;">
+    <h3>📊 Training Data</h3>
+    <div id="dataPanel" style="height:450px; overflow-y:auto; border:1px solid #ccc; padding:10px;"></div>
+  </div>
+
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let ball = {x:100, y:350};
+let hoop = {x:700, y:220, r:18};
+
+let dataset = [];
+let aimAngle = 45;
+
+let dragging = false;
+let wasDragging = false;
+let stick = {x: ball.x + 60, y: ball.y - 60};
+
+// ================= DRAW =================
+
+function drawCourt() {
+  ctx.fillStyle = "#dff0d8";
+  ctx.fillRect(0,0,800,450);
+
+  ctx.beginPath();
+  ctx.moveTo(0,380);
+  ctx.lineTo(800,380);
+  ctx.stroke();
+}
+
+function drawHoop() {
+  const rimW = 50, rimH = 15;
+
+  // Backboard
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(hoop.x + 30, hoop.y - 70, 12, 140);
+  ctx.strokeRect(hoop.x + 30, hoop.y - 70, 12, 140);
+
+  // Rim (3D effect)
+  ctx.beginPath();
+  ctx.ellipse(hoop.x, hoop.y, rimW/2, rimH/2, 0, 0, Math.PI);
+  ctx.strokeStyle = "rgba(255,140,0,0.4)";
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.ellipse(hoop.x, hoop.y, rimW/2, rimH/2, 0, Math.PI, 2*Math.PI);
+  ctx.strokeStyle = "orange";
+  ctx.lineWidth = 4;
+  ctx.stroke();
+
+  // Net
+  for (let i=-20;i<=20;i+=10){
+    ctx.beginPath();
+    ctx.moveTo(hoop.x+i, hoop.y);
+    ctx.quadraticCurveTo(hoop.x+i/2, hoop.y+25, hoop.x+i/3, hoop.y+40);
+    ctx.strokeStyle="#aaa";
+    ctx.stroke();
+  }
+}
+
+function drawBall(x,y){
+  ctx.beginPath();
+  ctx.arc(x,y,10,0,Math.PI*2);
+  ctx.fillStyle="#cc6600";
+  ctx.fill();
+}
+
+function drawAim(){
+  ctx.beginPath();
+  ctx.moveTo(ball.x, ball.y);
+  ctx.lineTo(stick.x, stick.y);
+  ctx.strokeStyle="blue";
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(stick.x, stick.y, 10, 0, Math.PI*2);
+  ctx.fillStyle="red";
+  ctx.fill();
+}
+
+function drawScene(){
+  ctx.clearRect(0,0,800,450);
+  drawCourt();
+  drawHoop();
+  drawBall(ball.x, ball.y);
+  drawAim();
+}
+
+drawScene();
+
+// ================= INTERACTION =================
+
+canvas.addEventListener("click", e => {
+  if (wasDragging) return;
+
+  let rect = canvas.getBoundingClientRect();
+  ball.x = e.clientX - rect.left;
+  ball.y = e.clientY - rect.top;
+
+  // reposition stick
+  stick.x = ball.x + 60 * Math.cos(aimAngle * Math.PI/180);
+  stick.y = ball.y - 60 * Math.sin(aimAngle * Math.PI/180);
+
+  drawScene();
+});
+
+canvas.addEventListener("mousedown", e => {
+  let rect = canvas.getBoundingClientRect();
+  let mx = e.clientX - rect.left;
+  let my = e.clientY - rect.top;
+
+  let dist = Math.sqrt((mx-stick.x)**2 + (my-stick.y)**2);
+
+  if (dist < 15){
+    dragging = true;
+    wasDragging = true;
+  }
+});
+
+canvas.addEventListener("mouseup", () => {
+  dragging = false;
+  setTimeout(()=> wasDragging=false, 50);
+});
+
+canvas.addEventListener("mousemove", e => {
+  if (!dragging) return;
+
+  let rect = canvas.getBoundingClientRect();
+  stick.x = e.clientX - rect.left;
+  stick.y = e.clientY - rect.top;
+
+  let dx = stick.x - ball.x;
+  let dy = ball.y - stick.y;
+
+  aimAngle = Math.atan2(dy, dx) * 180/Math.PI;
+
+  drawScene();
+});
+
+// ================= SHOOT =================
+
+function shoot(customPower, customAngle) {
+  let power = (customPower || document.getElementById("power").value) * 10;
+  let angleDeg = customAngle || aimAngle;
+  let angle = angleDeg * Math.PI/180;
+
+  let vx = power * Math.cos(angle);
+  let vy = -power * Math.sin(angle);
+
+  let x = ball.x;
+  let y = ball.y;
+
+  let hit = false;
+
+  function animate() {
+    drawScene();
+
+    vy += 0.5;
+    x += vx * 0.1;
+    y += vy * 0.1;
+
+    drawBall(x,y);
+
+    // RIM COLLISION (allow entry from top)
+    let dx = x - hoop.x;
+    let dy = y - hoop.y;
+    let dist = Math.sqrt(dx*dx + dy*dy);
+
+    let entering =
+      y < hoop.y &&
+      vy > 0 &&
+      Math.abs(dx) < hoop.r;
+
+    if (dist < hoop.r + 10 && !entering) {
+      let nx = dx/dist;
+      let ny = dy/dist;
+
+      let dot = vx*nx + vy*ny;
+
+      vx = vx - 2*dot*nx;
+      vy = vy - 2*dot*ny;
+
+      vx *= 0.6;
+      vy *= 0.6;
+
+      x = hoop.x + (hoop.r + 11)*nx;
+      y = hoop.y + (hoop.r + 11)*ny;
+    }
+
+    // BACKBOARD
+    let bl = hoop.x+30, br = hoop.x+42;
+    let bt = hoop.y-70, bb = hoop.y+70;
+
+    if (x+10>bl && x-10<br && y+10>bt && y-10<bb){
+      vx = -vx * 0.7;
+      x = bl - 10;
+    }
+
+    // BASKET
+    if (x>hoop.x-hoop.r && x<hoop.x+hoop.r && y>hoop.y && vy>0){
+      hit = true;
+    }
+
+    if (y<450 && x<800 && x>0){
+      requestAnimationFrame(animate);
+    } else {
+      dataset.push({x:ball.x,y:ball.y,power,angle,success:hit});
+      updateData();
+      drawScene();
+    }
+  }
+
+  animate();
+}
+
+// ================= ML =================
+
+function predictShot(){
+  let successData = dataset.filter(d=>d.success);
+  if (successData.length===0){
+    alert("No successful shots yet!");
+    return;
+  }
+
+  let best = successData[0];
+  let minDist = Infinity;
+
+  successData.forEach(d=>{
+    let dist = Math.hypot(d.x-ball.x, d.y-ball.y);
+    if (dist < minDist){
+      minDist = dist;
+      best = d;
+    }
+  });
+
+  shoot(best.power/10, best.angle*180/Math.PI);
+}
+
+// ================= DATA =================
+
+function updateData(){
+  const panel = document.getElementById("dataPanel");
+
+  panel.innerHTML = dataset.map((d,i)=>`
+    <div style="
+      margin-bottom:6px;
+      padding:6px;
+      border-radius:6px;
+      background:${d.success ? '#d4edda':'#f8d7da'};
+    ">
+      #${i+1}<br>
+      x:${Math.round(d.x)}, y:${Math.round(d.y)}<br>
+      power:${Math.round(d.power)}<br>
+      angle:${(d.angle*180/Math.PI).toFixed(1)}°<br>
+      ${d.success ? "✅":"❌"}
+    </div>
+  `).join("");
+}
+</script>
+
+</body>
+</html>

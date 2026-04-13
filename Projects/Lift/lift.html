@@ -5,6 +5,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
 
+
   <style>
     body {
       margin: 0;
@@ -39,19 +40,22 @@
   </style>
 </head>
 
+
 <body>
   <div class="box">
     <h2>AI Lift Control</h2>
     <button onclick="connectSerial()">1. Connect Arduino</button>
     <button onclick="init()">2. Start Camera</button>
-    
+   
     <h3 id="result">Waiting for Command...</h3>
     <div id="webcam-container"></div>
   </div>
 
+
 <script>
   const URL = "https://teachablemachine.withgoogle.com/models/s90yeN6cj/";
   let model, webcam, port, writer;
+
 
   // Serial Connection Function
   async function connectSerial() {
@@ -59,22 +63,25 @@
       port = await navigator.serial.requestPort();
       await port.open({ baudRate: 9600 });
       writer = port.writable.getWriter();
-      alert("Arduino Connected! Please Start Camera");
+      alert("Arduino Connected! pleeze start your camera.");
     } catch (err) {
       alert("Serial Connection Failed. Please use Chrome!");
     }
   }
 
+
   async function init() {
     model = await tmImage.load(URL + "model.json", URL + "metadata.json");
-    
+   
     webcam = new tmImage.Webcam(300, 300, true);
     await webcam.setup();
     await webcam.play();
 
+
     document.getElementById("webcam-container").appendChild(webcam.canvas);
     window.requestAnimationFrame(loop);
   }
+
 
   async function loop() {
     webcam.update();
@@ -82,22 +89,25 @@
     window.requestAnimationFrame(loop);
   }
 
+
  async function predict() {
     const p = await model.predict(webcam.canvas);
 
+
     if (p[0].probability > 0.9) {
       document.getElementById("result").innerText = "HAND UP ⬆️";
-      sendCommand("U"); // Arduino ke liye 'U' bhej rahe hain
-    } 
+      sendCommand("U"); 
+    }
     else if (p[1].probability > 0.9) {
       document.getElementById("result").innerText = "HAND DOWN ⬇️";
-      sendCommand("D"); // Arduino ke liye 'D' bhej rahe hain
+      sendCommand("D"); 
     }
     else if (p[2].probability > 0.9) {
       document.getElementById("result").innerText = "STOP ✋";
-      sendCommand("S"); // Arduino ke liye 'S' bhej rahe hain
+      sendCommand("S"); 
     }
   }
+
 
   async function sendCommand(val) {
     if (writer) {
