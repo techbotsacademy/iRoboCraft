@@ -1,69 +1,101 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>🎵 Real Pitch AI (SPICE)</title>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/spice"></script>
+  <title>🎵 Pitch Detection (Working)</title>
 </head>
 
 <body style="text-align:center; font-family:Arial;">
 
-<h2>🎵 Real Pitch Detection AI</h2>
-<p>Click Start → Speak or sing 🎤</p>
-
+<h2>🎵 Pitch Detection</h2>
 <button onclick="start()">▶️ Start</button>
 
 <h3 id="freq">Frequency: -- Hz</h3>
-<h3 id="note">Note: --</h3>
-
-<canvas id="graph" width="500" height="200" style="border:1px solid"></canvas>
 
 <script>
-let model;
+let audioContext;
+let analyser;
+let buffer;
 
-async function loadModel() {
-  try {
-    model = await spice.load();
-    console.log("✅ Model loaded");
-  } catch (e) {
-    console.error("❌ Model load failed", e);
-    alert("Model failed to load. Check internet.");
-  }
+function start() {
+  navigator.mediaDevices.getUserMedia({ audio: true })
+    .then(stream => {
+      audioContext = new AudioContext();
+      const source = audioContext.createMediaStreamSource(stream);
+
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 2048;
+
+      source.connect(analyser);
+
+      buffer = new Float32Array(analyser.fftSize);
+
+      detect();
+    });
 }
 
-async function start() {
-  try {
-    await loadModel();
+function detect() {
+  analyser.getFloatTimeDomainData(buffer);
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    console.log("✅ Mic access granted");
+  let freq = autoCorrelate(buffer, audioContext.sampleRate);
 
-    const audioContext = new AudioContext();
-    const source = audioContext.createMediaStreamSource(stream);
+  document.getElementById("freq").innerText =
+    "Frequency: " + (freq ? freq.toFixed(2) : "--") + " Hz";
 
-    const analyser = audioContext.createAnalyser();
-    source.connect(analyser);
+  requestAnimationFrame(detect);
+}
 
-    const data = new Float32Array(1024);
+// Autocorrelation (core pitch detection)
+function autoCorrelate(buf, sampleRate) {
+  let SIZE = buf.length;
+  let rms = 0;
 
-    async function detect() {
-      analyser.getFloatTimeDomainData(data);
-
-      const input = tf.tensor(data);
-      const pitch = await model.estimatePitch(input);
-
-      document.getElementById("freq").innerText =
-        "Frequency: " + (pitch ? pitch.toFixed(2) : "0") + " Hz";
-
-      requestAnimationFrame(detect);
-    }
-
-    detect();
-
-  } catch (err) {
-    console.error("❌ Error:", err);
-    alert("Error: " + err.message);
+  for (let i = 0; i < SIZE; i++) {
+    rms += buf[i] * buf[i];
   }
+  rms = Math.sqrt(rms / SIZE);
+  if (rms < 0.01) return null;
+
+  let r1 = 0, r2 = SIZE - 1;
+
+  for (let i = 0; i < SIZE / 2; i++) {
+    if (Math.abs(buf[i]) < 0.2) {
+      r1 = i;
+      break;
+    }
+  }
+
+  for (let i = 1; i < SIZE / 2; i++) {
+    if (Math.abs(buf[SIZE - i]) < 0.2) {
+      r2 = SIZE - i;
+      break;
+    }
+  }
+
+  buf = buf.slice(r1, r2);
+  SIZE = buf.length;
+
+  let c = new Array(SIZE).fill(0);
+
+  for (let i = 0; i < SIZE; i++) {
+    for (let j = 0; j < SIZE - i; j++) {
+      c[i] = c[i] + buf[j] * buf[j + i];
+    }
+  }
+
+  let d = 0;
+  while (c[d] > c[d + 1]) d++;
+
+  let maxval = -1, maxpos = -1;
+  for (let i = d; i < SIZE; i++) {
+    if (c[i] > maxval) {
+      maxval = c[i];
+      maxpos = i;
+    }
+  }
+
+  let T0 = maxpos;
+
+  return sampleRate / T0;
 }
 </script>
 
