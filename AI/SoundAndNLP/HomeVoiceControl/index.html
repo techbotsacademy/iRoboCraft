@@ -85,7 +85,7 @@ body {
 <button onclick="connect()">🔌 Connect Arduino</button>
 
 <div class="mic" onclick="start()">🎤</div>
-
+<h3 id="arduinostatus">Connect to Arduino</h3>
 <h3 id="status">Waiting...</h3>
 
 <div id="light" class="btn off">💡 Light OFF</div>
@@ -95,23 +95,35 @@ let port;
 let writer;
 
 // CONNECT TO ARDUINO
-async function connect(){
-  try{
-    port = await navigator.serial.requestPort();
-    await port.open({ baudRate:9600 });
-    writer = port.writable.getWriter();
+async function connect() {
+    if (!("serial" in navigator)) {
+        alert("Web Serial API not supported in this browser");
+        return;
+    }
 
-    document.getElementById("status").innerText = "Connected ✅";
-  }catch(e){
-    console.log(e);
-  }
+    try {
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 9600 });
+
+        if (!port.writable) {
+            throw new Error("Port is not writable");
+        }
+
+        writer = port.writable.getWriter();
+
+        document.getElementById("arduinostatus").innerText = "Connected ✅ Say ON/OFF";
+        console.log("Serial connection established");
+
+    } catch (err) {
+        console.error(err);
+        alert("Connection failed: " + err.message);
+    }
 }
-
 // SEND DATA
 async function send(data){
   if(!writer) return;
   const encoder = new TextEncoder();
-  await writer.write(encoder.encode(data+"\\n"));
+  await writer.write(encoder.encode(data+"\n"));
 }
 
 // SPEECH

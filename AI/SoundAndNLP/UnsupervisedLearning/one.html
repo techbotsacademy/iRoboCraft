@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>K-Means Sound Clustering</title>
+  <style>
+    body {
+      font-family: Arial;
+      text-align: center;
+      background: #f4f4f4;
+    }
+    canvas {
+      border: 1px solid #333;
+      background: white;
+    }
+    button {
+      padding: 10px;
+      margin: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<h2>🎤 Live Sound Clustering (K-Means)</h2>
+<p>Speak different sounds (clap, voice, whistle). Silence is ignored.</p>
+
+<button onclick="start()">Start</button>
+<button onclick="clearData()">Clear Data</button>
+
+<br><br>
+<canvas id="canvas" width="600" height="400"></canvas>
+
+<script>
+let audioContext, analyser, dataArray;
+let points = []; // store all sound data
+let k = 3;
+let centroids = [];
+
+// Start microphone
+async function start() {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  audioContext = new AudioContext();
+  analyser = audioContext.createAnalyser();
+
+  const source = audioContext.createMediaStreamSource(stream);
+  source.connect(analyser);
+
+  analyser.fftSize = 256;
+  dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+  loop();
+}
+
+// Main loop
+function loop() {
+  requestAnimationFrame(loop);
+
+  analyser.getByteFrequencyData(dataArray);
+
+  let volume = dataArray.reduce((a, b) => a + b) / dataArray.length;
+
+  // Ignore silence
+  if (volume < 20) return;
+
+  let dominantFreq = dataArray.indexOf(Math.max(...dataArray));
+
+  // Store data (never delete)
+  points.push([dominantFreq, volume]);
+
+  runKMeans();
+  draw();
+}
+
+// K-means clustering
+function runKMeans() {
+  if (points.length < k) return;
+
+  // Initialize centroids randomly (only once)
+  if (centroids.length === 0) {
+    for (let i = 0; i < k; i++) {
+      centroids.push(points[Math.floor(Math.random() * points.length)]);
+    }
+  }
+
+  // Assign clusters
+  for (let p of points) {
+    let minDist = Infinity;
+    let cluster = 0;
+
+    centroids.forEach((c, i) => {
+      let dist = Math.hypot(p[0] - c[0], p[1] - c[1]);
+      if (dist < minDist) {
+        minDist = dist;
+        cluster = i;
+      }
+    });
+
+    p.cluster = cluster;
+  }
+
+  // Update centroids
+  for (let i = 0; i < k; i++) {
+    let clusterPoints = points.filter(p => p.cluster === i);
+    if (clusterPoints.length === 0) continue;
+
+    let avgX = clusterPoints.reduce((a, b) => a + b[0], 0) / clusterPoints.length;
+    let avgY = clusterPoints.reduce((a, b) => a + b[1], 0) / clusterPoints.length;
+
+    centroids[i] = [avgX, avgY];
+  }
+}
+
+// Draw points
+function draw() {
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  let colors = ["red", "blue", "green", "purple", "orange"];
+
+  // Draw points
+  for (let p of points) {
+    ctx.fillStyle = colors[p.cluster || 0];
+    ctx.beginPath();
+    ctx.arc(p[0] * 2, canvas.height - p[1] * 2, 5, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+
+  // Draw centroids
+  ctx.fillStyle = "black";
+  for (let c of centroids) {
+    ctx.beginPath();
+    ctx.arc(c[0] * 2, canvas.height - c[1] * 2, 8, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+}
+
+// Clear data manually
+function clearData() {
+  points = [];
+  centroids = [];
+}
+</script>
+
+</body>
+</html>

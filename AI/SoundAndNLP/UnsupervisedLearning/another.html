@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Sound AI Control</title>
+  <style>
+    body { font-family: Arial; text-align: center; background: #f4f4f4; }
+    canvas { border: 1px solid black; background: white; }
+    button { padding: 10px; margin: 5px; }
+    #status { font-size: 20px; margin: 10px; }
+  </style>
+</head>
+
+<body>
+
+<h2>🎤 Sound AI Control System</h2>
+
+<button onclick="start()">Start Mic</button>
+<button onclick="setMode('clap')">Train Clap</button>
+<button onclick="setMode('voice')">Train Voice</button>
+<button onclick="setMode('whistle')">Train Whistle</button>
+<button onclick="setMode('run')">Run Mode</button>
+<button onclick="clearData()">Clear</button>
+
+<div id="status">Mode: Idle</div>
+
+<canvas id="canvas" width="600" height="400"></canvas>
+
+<script>
+let audioContext, analyser, dataArray;
+let points = [];
+let centroids = [];
+let k = 3;
+
+let mode = "idle";
+let clusterLabels = {}; // clusterId -> label
+let recentClusters = [];
+
+function setMode(m) {
+  mode = m;
+  document.getElementById("status").innerText = "Mode: " + m.toUpperCase();
+}
+
+async function start() {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+  audioContext = new AudioContext();
+  analyser = audioContext.createAnalyser();
+
+  const source = audioContext.createMediaStreamSource(stream);
+  source.connect(analyser);
+
+  analyser.fftSize = 256;
+  dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+  loop();
+}
+
+function loop() {
+  requestAnimationFrame(loop);
+
+  analyser.getByteFrequencyData(dataArray);
+
+  let volume = dataArray.reduce((a, b) => a + b) / dataArray.length;
+  if (volume < 20) return;
+
+  let freq = dataArray.indexOf(Math.max(...dataArray));
+  let point = [freq, volume];
+
+  points.push(point);
+
+  runKMeans();
+  draw();
+
+  if (point.cluster !== undefined) {
+    handleLearning(point.cluster);
+  }
+}
+
+function runKMeans() {
+  if (points.length < k) return;
+
+  if (centroids.length === 0) {
+    for (let i = 0; i < k; i++) {
+      centroids.push(points[Math.floor(Math.random() * points.length)]);
+    }
+  }
+
+  for (let p of points) {
+    let minDist = Infinity;
+    let cluster = 0;
+
+    centroids.forEach((c, i) => {
+      let dist = Math.hypot(p[0] - c[0], p[1] - c[1]);
+      if (dist < minDist) {
+        minDist = dist;
+        cluster = i;
+      }
+    });
+
+    p.cluster = cluster;
+  }
+
+  for (let i = 0; i < k; i++) {
+    let clusterPoints = points.filter(p => p.cluster === i);
+    if (clusterPoints.length === 0) continue;
+
+    let avgX = clusterPoints.reduce((a, b) => a + b[0], 0) / clusterPoints.length;
+    let avgY = clusterPoints.reduce((a, b) => a + b[1], 0) / clusterPoints.length;
+
+    centroids[i] = [avgX, avgY];
+  }
+}
+
+// TRAINING + RUN LOGIC
+function handleLearning(clusterId) {
+
+  // TRAIN MODE
+  if (mode === "clap" || mode === "voice" || mode === "whistle") {
+    clusterLabels[clusterId] = mode;
+  }
+
+  // RUN MODE
+  if (mode === "run") {
+    let stable = getStableCluster(clusterId);
+    let label = clusterLabels[stable];
+
+    if (label) {
+      document.getElementById("status").innerText = "Detected: " + label;
+      triggerAction(label);
+    }
+  }
+}
+
+// STABILITY FILTER
+function getStableCluster(newCluster) {
+  recentClusters.push(newCluster);
+  if (recentClusters.length > 8) recentClusters.shift();
+
+  let count = {};
+  recentClusters.forEach(c => count[c] = (count[c] || 0) + 1);
+
+  return Object.keys(count).reduce((a, b) =>
+    count[a] > count[b] ? a : b
+  );
+}
+
+// ACTIONS
+function triggerAction(label) {
+  if (label === "clap") {
+    console.log("💡 Light ON");
+    sendToArduino("LIGHT_ON");
+  }
+
+  if (label === "whistle") {
+    console.log("💡 Light OFF");
+    sendToArduino("LIGHT_OFF");
+  }
+
+  if (label === "voice") {
+    console.log("🗣️ Voice detected");
+  }
+}
+
+// SEND TO ARDUINO (WiFi / ESP)
+function sendToArduino(cmd) {
+  fetch("http://192.168.1.10/" + cmd)
+    .catch(() => console.log("Arduino not connected"));
+}
+
+// DRAW
+function draw() {
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d");
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  let colors = ["red", "blue", "green"];
+
+  for (let p of points) {
+    ctx.fillStyle = colors[p.cluster || 0];
+    ctx.beginPath();
+    ctx.arc(p[0] * 2, canvas.height - p[1] * 2, 4, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = "black";
+  for (let c of centroids) {
+    ctx.beginPath();
+    ctx.arc(c[0] * 2, canvas.height - c[1] * 2, 8, 0, 2 * Math.PI);
+    ctx.fill();
+  }
+}
+
+function clearData() {
+  points = [];
+  centroids = [];
+  clusterLabels = {};
+  recentClusters = [];
+}
+</script>
+
+</body>
+</html>

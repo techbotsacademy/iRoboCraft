@@ -9,36 +9,64 @@
 <h2>🎧 Sound Bubble AI Map 🫧</h2>
 <p>Make different sounds → Watch bubbles group!</p>
 
-<button onclick="start()">Start Mic</button>
+<button onclick="start()">▶ Start</button>
+<button onclick="stop()">⏸ Stop</button>
+<button onclick="clearMap()">🧹 Clear</button>
+
+<br><br>
 
 <canvas id="map" width="700" height="400" style="border:1px solid"></canvas>
 
 <script>
-let audioContext, analyser, buffer;
+let audioContext, analyser, buffer, sourceNode, streamRef;
 let sounds = [];
+let running = false;
 
 function start(){
+  if(running) return;
+
   navigator.mediaDevices.getUserMedia({audio:true})
   .then(stream=>{
+    streamRef = stream;
     audioContext = new AudioContext();
-    let source = audioContext.createMediaStreamSource(stream);
+
+    sourceNode = audioContext.createMediaStreamSource(stream);
     analyser = audioContext.createAnalyser();
     analyser.fftSize = 1024;
-    source.connect(analyser);
 
+    sourceNode.connect(analyser);
     buffer = new Float32Array(analyser.fftSize);
 
+    running = true;
     detect();
   });
 }
 
+function stop(){
+  running = false;
+
+  if(streamRef){
+    streamRef.getTracks().forEach(track => track.stop());
+  }
+
+  if(audioContext){
+    audioContext.close();
+  }
+}
+
+function clearMap(){
+  sounds = [];   // ONLY clears when button pressed
+  draw();
+}
+
 function detect(){
+  if(!running) return;
+
   analyser.getFloatTimeDomainData(buffer);
 
   let freq = autoCorrelate(buffer, audioContext.sampleRate);
   let volume = getVolume(buffer);
 
-  // Only add meaningful sounds
   if(freq && volume > 0.02){
     sounds.push({
       freq,
@@ -47,7 +75,7 @@ function detect(){
       y: Math.random()*400
     });
 
-    if(sounds.length > 40) sounds.shift();
+    if(sounds.length > 60) sounds.shift();
   }
 
   cluster();
@@ -65,7 +93,7 @@ function getVolume(buf){
   return Math.sqrt(sum/buf.length);
 }
 
-// 🧠 simple clustering: move similar sounds closer
+// 🧠 clustering
 function cluster(){
   for(let i=0;i<sounds.length;i++){
     for(let j=0;j<sounds.length;j++){
@@ -76,12 +104,10 @@ function cluster(){
 
       let distFreq = Math.abs(a.freq - b.freq);
 
-      // if similar frequency → attract
       if(distFreq < 100){
         a.x += (b.x - a.x) * 0.01;
         a.y += (b.y - a.y) * 0.01;
       } else {
-        // if different → repel
         a.x -= (b.x - a.x) * 0.005;
         a.y -= (b.y - a.y) * 0.005;
       }
@@ -89,7 +115,7 @@ function cluster(){
   }
 }
 
-// 🎨 draw bubbles
+// 🎨 draw
 function draw(){
   let c = document.getElementById("map");
   let ctx = c.getContext("2d");
@@ -99,7 +125,6 @@ function draw(){
   sounds.forEach(s=>{
     let size = s.volume * 300;
 
-    // color based on frequency cluster
     let color = s.freq < 300 ? "blue" :
                 s.freq < 700 ? "green" : "red";
 
