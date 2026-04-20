@@ -111,7 +111,7 @@ async function connect(){
 async function send(data){
   if(!writer) return;
   const encoder = new TextEncoder();
-  await writer.write(encoder.encode(data + "\\n"));
+  await writer.write(encoder.encode(data));
 }
 
 // SPEECH
@@ -141,13 +141,13 @@ function process(text){
   if(text.includes("light on")){
     document.getElementById("light").innerText = "💡 Light ON";
     document.getElementById("light").className = "btn on";
-    send("ON");
+    send(1);
   }
 
   else if(text.includes("light off")){
     document.getElementById("light").innerText = "💡 Light OFF";
     document.getElementById("light").className = "btn off";
-    send("OFF");
+    send(0);
   }
 
   else{
