@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>AI Lift Control (Palm/Back Visualizer)</title>
+  
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+
+  <style>
+    body { margin: 0; background: #1a1a1a; color: white; text-align: center; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    
+    .container { position: relative; margin-top: 15px; display: inline-block; }
+    
+    /* Video ko chhupa denge aur Canvas par draw karenge */
+    video { display: none; }
+    
+    canvas { 
+      border: 5px solid #444; 
+      border-radius: 20px; 
+      background: black;
+      /* Camera view ko mirror karne ke liye taaki natural lage */
+      transform: rotateY(180deg);
+      -webkit-transform:rotateY(180deg); /* Safari/Chrome */
+      -moz-transform:rotateY(180deg); /* Firefox */
+    }
+    
+    button { padding: 12px 24px; margin: 10px; font-size: 16px; font-weight: bold; border-radius: 8px; border: none; cursor: pointer; transition: 0.3s; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+    button:active { transform: scale(0.98); }
+    .btn-connect { background: #2ecc71; color: white; }
+    .btn-connect:hover { background: #27ae60; }
+    .btn-camera { background: #3498db; color: white; }
+    .btn-camera:hover { background: #2980b9; }
+    
+    #status-container { margin-top: 10px; min-height: 40px; }
+    #status { font-size: 24px; color: #f1c40f; margin: 0; }
+    #cmd-sent { font-size: 16px; color: #bdc3c7; }
+  </style>
+</head>
+<body>
+
+<h2>🤖 AI Lift Control Visualizer</h2>
+
+<button class="btn-connect" onclick="connectSerial()">1. Connect Arduino</button>
+<button class="btn-camera" onclick="startCamera()">2. Start Camera</button>
+
+<div id="status-container">
+  <h3 id="status">Waiting for Connection...</h3>
+  <div id="cmd-sent">Last Serial Cmd: None</div>
+</div>
+
+<div class="container">
+  <video id="video" width="640" height="480" autoplay></video>
+  <canvas id="canvas" width="640" height="480"></canvas>
+</div>
+
+<script>
+let port, writer;
+let lastCommand = "";
+
+// Canvas setup
+const videoElement = document.getElementById('video');
+const canvasElement = document.getElementById('canvas');
+const canvasCtx = canvasElement.getContext('2d');
+const statusElement = document.getElementById("status");
+const cmdElement = document.getElementById("cmd-sent");
+
+async function connectSerial() {
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 9600 });
+    writer = port.writable.getWriter();
+    statusElement.innerText = "Arduino Connected! Start Camera.";
+    alert("Arduino Connected ✅");
+  } catch (err) {
+    statusElement.innerText = "Serial Connection Failed.";
+    alert("Connection Failed! Use Chrome and check USB.");
+  }
+}
+
+async function sendCommand(cmd) {
+  if (writer && cmd !== lastCommand) {
+    try {
+        const data = new TextEncoder().encode(cmd);
+        await writer.write(data);
+        lastCommand = cmd;
+        cmdElement.innerText = "Last Serial Cmd: " + cmd;
+        console.log("Sent:", cmd);
+    } catch (e) {
+        console.error("Error sending serial data:", e);
+    }
+  }
+}
+
+function startCamera() {
+  statusElement.innerText = "Loading AI Model...";
+  
+  const hands = new Hands({
+    locateFile: (file) => https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}
+  });
+
+  hands.setOptions({
+    maxNumHands: 1,
+    modelComplexity: 1, // Behtar accuracy ke liye
+    minDetectionConfidence: 0.7,
+    minTrackingConfidence: 0.7
+  });
+
+  hands.onResults(onResults);
+
+  const camera = new Camera(videoElement, {
+    onFrame: async () => {
+      await hands.send({image: videoElement});
+    },
+    width: 640,
+    height: 480
+  });
+  camera.start();
+}
+
+function onResults(results) {
+  // 1. Canvas ko clean karein aur naya video frame draw karein
+  canvasCtx.save();
+  canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+  canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+  // 2. Agar haat detect nahi hua
+  if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+    statusElement.innerText = "NO HAND → STOP ✋";
+    statusElement.style.color = "#f1c40f"; // Yellow
+    sendCommand("S");
+    canvasCtx.restore();
+    return;
+  }
+
+  // 3. Hand data process karein
+  const landmarks = results.multiHandLandmarks[0];
+  // Note: MediaPipe chirality (left/right) mirror video mein flip ho jati hai.
+  // 'Right' label actually user ka left hand hota hai screen par, aur vice versa.
+  const isAnnotatedRight = results.multiHandedness[0].label === "Right";
+  
+  const thumbX = landmarks[4].x;
+  const pinkyX = landmarks[20].x;
+
+  let side = "";
+  // Mirror imaging ke hisab se logic:
+  if (isAnnotatedRight) {
+    side = (thumbX < pinkyX) ? "PALM" : "BACK";
+  } else {
+    side = (thumbX > pinkyX) ? "PALM" : "BACK";
+  }
+
+  // 4. Color decide karein aur commands bhejein
+  let connectionColor, landmarkColor;
+
+  if (side === "PALM") {
+    statusElement.innerText = "FRONT (PALM) → UP ⬆️";
+    statusElement.style.color = "#2ecc71"; // Green text
+    landmarkColor = '#FFFFFF'; // White dots
+    connectionColor = '#00FF00'; // Green lines
+    sendCommand("U");
+  } else {
+    statusElement.innerText = "BACK HAND → DOWN ⬇️";
+    statusElement.style.color = "#e74c3c"; // Red text
+    landmarkColor = '#FFFFFF'; // White dots
+    connectionColor = '#FF0000'; // Red lines
+    sendCommand("D");
+  }
+
+  // 5. Canvas par dots aur lines draw karein (Colored)
+  drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS,
+                 {color: connectionColor, lineWidth: 4});
+  drawLandmarks(canvasCtx, landmarks,
+                {color: landmarkColor, fillColor: connectionColor, lineWidth: 2, radius: 6});
+
+  canvasCtx.restore();
+}
+</script>
+</body>
+</html>

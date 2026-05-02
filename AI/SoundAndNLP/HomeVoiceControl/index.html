@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+
 <title>Home Voice Control (Arduino)</title>
 
 <style>
@@ -89,10 +91,17 @@ body {
 <h3 id="status">Waiting...</h3>
 
 <div id="light" class="btn off">💡 Light OFF</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
 
 <script>
 let port;
 let writer;
+
+var editor = CodeMirror.fromTextArea(document.getElementById("code"), {
+    lineNumbers: true,
+    mode: "javascript"
+});
+
 
 // CONNECT TO ARDUINO
 async function connect() {
