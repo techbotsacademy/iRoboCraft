@@ -112,7 +112,7 @@ async function connect() {
 async function send(data){
   if(!writer) return;
   const encoder = new TextEncoder();
-  await writer.write(encoder.encode(data + "\\n"));
+  await writer.write(encoder.encode(data + "\n"));
 }
 
 function start(){
