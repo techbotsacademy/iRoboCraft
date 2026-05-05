@@ -2,9 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
 
 <title>Home Voice Control (Arduino)</title>
+
+<!-- CodeMirror (ONLY for editor panel) -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
 
 <style>
 body {
@@ -26,7 +29,6 @@ textarea {
   background: #111;
   color: #0f0;
   font-family: monospace;
-  padding: 10px;
 }
 
 button {
@@ -91,22 +93,16 @@ body {
 <h3 id="status">Waiting...</h3>
 
 <div id="light" class="btn off">💡 Light OFF</div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
 
 <script>
 let port;
 let writer;
-
-var editor = CodeMirror.fromTextArea(document.getElementById("code"), {
-    lineNumbers: true,
-    mode: "javascript"
-});
-
+let recognition;
 
 // CONNECT TO ARDUINO
 async function connect() {
     if (!("serial" in navigator)) {
-        alert("Web Serial API not supported in this browser");
+        alert("Web Serial API not supported");
         return;
     }
 
@@ -114,47 +110,49 @@ async function connect() {
         port = await navigator.serial.requestPort();
         await port.open({ baudRate: 9600 });
 
-        if (!port.writable) {
-            throw new Error("Port is not writable");
-        }
-
         writer = port.writable.getWriter();
 
         document.getElementById("arduinostatus").innerText = "Connected ✅ Say ON/OFF";
-        console.log("Serial connection established");
 
     } catch (err) {
-        console.error(err);
         alert("Connection failed: " + err.message);
     }
 }
+
 // SEND DATA
 async function send(data){
   if(!writer) return;
   const encoder = new TextEncoder();
-  await writer.write(encoder.encode(data+"\n"));
+  await writer.write(encoder.encode(data + "\\n"));
 }
 
-// SPEECH
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-const recognition = new SpeechRecognition();
-recognition.lang = "en-IN";
-
+// START VOICE
 function start(){
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+    alert("Speech Recognition not supported in this browser");
+    return;
+  }
+
+  recognition = new SpeechRecognition();
+  recognition.lang = "en-IN";
+
+  recognition.onresult = function(e){
+    const text = e.results[0][0].transcript.toLowerCase();
+    document.getElementById("status").innerText = "You said: " + text;
+
+    process(text);
+
+    setTimeout(()=>{
+      document.getElementById("status").innerText = "Waiting...";
+    },2000);
+  };
+
   recognition.start();
   document.getElementById("status").innerText = "Listening...";
 }
-
-recognition.onresult = function(e){
-  const text = e.results[0][0].transcript.toLowerCase();
-  document.getElementById("status").innerText = "You said: " + text;
-
-  process(text);
-
-  setTimeout(()=>{
-    document.getElementById("status").innerText = "Waiting...";
-  },2000);
-};
 
 // PROCESS COMMAND
 function process(text){
@@ -190,9 +188,14 @@ function process(text){
 </div>
 
 <script>
+var editor = CodeMirror.fromTextArea(document.getElementById("code"), {
+  lineNumbers: true,
+  mode: "htmlmixed",
+  theme: "default"
+});
+
 function runCode(){
-  document.getElementById("frame").srcdoc =
-    document.getElementById("code").value;
+  document.getElementById("frame").srcdoc = editor.getValue();
 }
 </script>
 

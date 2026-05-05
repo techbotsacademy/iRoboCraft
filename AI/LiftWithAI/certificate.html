@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bulk Certificate Generator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; padding: 40px; background: #f0f2f5; color: #333; }
+        .container { background: white; padding: 30px; border-radius: 15px; display: inline-block; box-shadow: 0 10px 25px rgba(0,0,0,0.1); max-width: 600px; width: 100%; }
+        h2 { color: #a15c12; margin-bottom: 20px; }
+        .input-group { text-align: left; margin-bottom: 20px; }
+        label { font-weight: bold; display: block; margin-bottom: 5px; }
+        input[type="file"], textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+        textarea { height: 120px; resize: vertical; }
+        button { background: #d48806; color: white; border: none; padding: 15px 30px; cursor: pointer; font-size: 18px; border-radius: 8px; font-weight: bold; width: 100%; transition: 0.3s; }
+        button:hover { background: #b37400; transform: translateY(-2px); }
+        #status { margin-top: 20px; font-weight: bold; color: #28a745; }
+        canvas { display: none; } /* Hidden canvas for processing images */
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Certificate Bulk Generator</h2>
+    
+    <div class="input-group">
+        <label>1. Select Certificate Template Image:</label>
+        <input type="file" id="imageInput" accept="image/*">
+    </div>
+
+    <div class="input-group">
+        <label>2. Paste Student Names (One name per line):</label>
+        <textarea id="nameList" placeholder="John Doe&#10;Jane Smith&#10;Alex Turner..."></textarea>
+    </div>
+    
+    <button onclick="generateCertificates()">Generate & Download PDFs</button>
+    
+    <div id="status"></div>
+</div>
+
+<canvas id="certCanvas"></canvas>
+
+<script>
+    const { jsPDF } = window.jspdf;
+
+    async function generateCertificates() {
+        const imageInput = document.getElementById('imageInput');
+        const textarea = document.getElementById('nameList');
+        const status = document.getElementById('status');
+        
+        // Split names by new line and remove empty entries
+        const names = textarea.value.split('\n').filter(name => name.trim() !== "");
+
+        // Validation checks
+        if (imageInput.files.length === 0) {
+            alert("Please select a certificate image first!");
+            return;
+        }
+        if (names.length === 0) {
+            alert("Please enter at least one name!");
+            return;
+        }
+
+        status.innerText = "Processing... Please wait...";
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const img = new Image();
+            img.onload = async function() {
+                const canvas = document.getElementById('certCanvas');
+                const ctx = canvas.getContext('2d');
+                
+                // Set canvas size to match original image dimensions
+                canvas.width = img.width;
+                canvas.height = img.height;
+
+                for (let i = 0; i < names.length; i++) {
+                    let name = names[i].trim();
+                    
+                    // Step 1: Clear canvas and draw the original certificate background
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0);
+
+                    // Step 2: Configure Text Style
+                    ctx.font = "italic 70px 'Times New Roman'"; // Increased size slightly for better visibility
+                    ctx.fillStyle = "#a15c12"; // Golden-brown color matching your logo
+                    ctx.textAlign = "center";
+
+                    // Step 3: Set Text Position
+                    // xPos is center (50% of width)
+                    // yPos adjusted to 550 to ensure name stays ABOVE the line, not ON it
+                    const xPos = canvas.width / 2;
+                    const yPos = 550; 
+                    
+                    ctx.fillText(name, xPos, yPos);
+
+                    // Step 4: Convert canvas to high-quality JPEG data
+                    const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                    
+                    // Step 5: Initialize PDF in Landscape mode matching image size
+                    const pdf = new jsPDF({
+                        orientation: 'landscape',
+                        unit: 'px',
+                        format: [canvas.width, canvas.height]
+                    });
+
+                    // Step 6: Add image to PDF and trigger Download
+                    pdf.addImage(imgData, 'JPEG', 0, 0, canvas.width, canvas.height);
+                    pdf.save(`Certificate_${name.replace(/\s+/g, '_')}.pdf`);
+
+                    // Update UI status
+                    status.innerText = `Generating: ${i + 1} of ${names.length}`;
+                    
+                    // Small delay (200ms) to prevent the browser from freezing during bulk download
+                    await new Promise(r => setTimeout(r, 200));
+                }
+                status.innerText = "Success! All certificates have been downloaded.";
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(imageInput.files[0]);
+    }
+</script>
+
+</body>
+</html>

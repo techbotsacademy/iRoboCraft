@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+
+<title>Home Voice Control (Arduino)</title>
+
+<!-- CodeMirror (ONLY for editor panel) -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial;
+  display: flex;
+  height: 100vh;
+}
+
+.left, .right {
+  width: 50%;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+textarea {
+  width: 100%;
+  height: 90%;
+  background: #111;
+  color: #0f0;
+  font-family: monospace;
+}
+
+button {
+  width: 100%;
+  padding: 10px;
+  margin-top: 5px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+iframe {
+  width: 100%;
+  height: 90%;
+  border: none;
+}
+</style>
+</head>
+
+<body>
+
+<!-- LEFT PANEL -->
+<div class="left">
+<textarea id="code">
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body {
+  background:#111;
+  color:white;
+  text-align:center;
+  font-family:Arial;
+}
+
+.mic {
+  font-size:50px;
+  margin:20px;
+  cursor:pointer;
+}
+
+.btn {
+  padding:10px 20px;
+  border-radius:10px;
+  border:1px solid #444;
+  display:inline-block;
+  margin-top:20px;
+}
+
+.on { color:lightgreen; }
+.off { color:red; }
+</style>
+</head>
+
+<body>
+
+<h2>🏠 Home Voice Control</h2>
+
+<button onclick="connect()">🔌 Connect Arduino</button>
+
+<div class="mic" onclick="start()">🎤</div>
+<h3 id="arduinostatus">Connect to Arduino</h3>
+<h3 id="status">Waiting...</h3>
+
+<div id="light" class="btn off">💡 Light OFF</div>
+
+<script>
+let port;
+let writer;
+let recognition;
+
+// CONNECT TO ARDUINO
+async function connect() {
+    if (!("serial" in navigator)) {
+        alert("Web Serial API not supported");
+        return;
+    }
+
+    try {
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 9600 });
+
+        writer = port.writable.getWriter();
+
+        document.getElementById("arduinostatus").innerText = "Connected ✅ Say ON/OFF";
+
+    } catch (err) {
+        alert("Connection failed: " + err.message);
+    }
+}
+
+// SEND DATA
+async function send(data){
+  if(!writer) return;
+  const encoder = new TextEncoder();
+  await writer.write(encoder.encode(data + "\\n"));
+}
+
+// START VOICE
+function start(){
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+    alert("Speech Recognition not supported in this browser");
+    return;
+  }
+
+  recognition = new SpeechRecognition();
+  recognition.lang = "en-IN";
+
+  recognition.onresult = function(e){
+    const text = e.results[0][0].transcript.toLowerCase();
+    document.getElementById("status").innerText = "You said: " + text;
+
+    process(text);
+
+    setTimeout(()=>{
+      document.getElementById("status").innerText = "Waiting...";
+    },2000);
+  };
+
+  recognition.start();
+  document.getElementById("status").innerText = "Listening...";
+}
+
+// PROCESS COMMAND
+function process(text){
+
+  if(text.includes("light on")){
+    document.getElementById("light").innerText = "💡 Light ON";
+    document.getElementById("light").className = "btn on";
+    send("ON");
+  }
+
+  else if(text.includes("light off")){
+    document.getElementById("light").innerText = "💡 Light OFF";
+    document.getElementById("light").className = "btn off";
+    send("OFF");
+  }
+
+  else{
+    document.getElementById("status").innerText = "❌ I didn’t get that";
+  }
+}
+</script>
+
+</body>
+</html>
+</textarea>
+
+<button onclick="runCode()">▶ Run Code</button>
+</div>
+
+<!-- RIGHT PANEL -->
+<div class="right">
+  <iframe id="frame"></iframe>
+</div>
+
+<script>
+var editor = CodeMirror.fromTextArea(document.getElementById("code"), {
+  lineNumbers: true,
+  mode: "htmlmixed",
+  theme: "default"
+});
+
+function runCode(){
+  document.getElementById("frame").srcdoc = editor.getValue();
+}
+</script>
+
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+
+<title>Home Voice Control (Arduino)</title>
+
+<style>
+body {
+  margin: 0;
+  font-family: Arial;
+  display: flex;
+  height: 100vh;
+}
+
+.left, .right {
+  width: 50%;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+textarea {
+  width: 100%;
+  height: 90%;
+  background: #111;
+  color: #0f0;
+  font-family: monospace;
+  padding: 10px;
+}
+
+button {
+  width: 100%;
+  padding: 10px;
+  margin-top: 5px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+iframe {
+  width: 100%;
+  height: 90%;
+  border: none;
+}
+</style>
+</head>
+
+<body>
+
+<!-- LEFT PANEL -->
+<div class="left">
+<textarea id="code">
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+body {
+  background:#111;
+  color:white;
+  text-align:center;
+  font-family:Arial;
+}
+
+.mic {
+  font-size:50px;
+  margin:20px;
+  cursor:pointer;
+}
+
+.btn {
+  padding:10px 20px;
+  border-radius:10px;
+  border:1px solid #444;
+  display:inline-block;
+  margin-top:20px;
+}
+
+.on { color:lightgreen; }
+.off { color:red; }
+</style>
+</head>
+
+<body>
+
+<h2>🏠 Home Voice Control</h2>
+
+<button onclick="connect()">🔌 Connect Arduino</button>
+
+<div class="mic" onclick="start()">🎤</div>
+<h3 id="arduinostatus">Connect to Arduino</h3>
+<h3 id="status">Waiting...</h3>
+
+<div id="light" class="btn off">💡 Light OFF</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+
+<script>
+let port;
+let writer;
+
+var editor = CodeMirror.fromTextArea(document.getElementById("code"), {
+    lineNumbers: true,
+    mode: "javascript"
+});
+
+
+// CONNECT TO ARDUINO
+async function connect() {
+    if (!("serial" in navigator)) {
+        alert("Web Serial API not supported in this browser");
+        return;
+    }
+
+    try {
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 9600 });
+
+        if (!port.writable) {
+            throw new Error("Port is not writable");
+        }
+
+        writer = port.writable.getWriter();
+
+        document.getElementById("arduinostatus").innerText = "Connected ✅ Say ON/OFF";
+        console.log("Serial connection established");
+
+    } catch (err) {
+        console.error(err);
+        alert("Connection failed: " + err.message);
+    }
+}
+// SEND DATA
+async function send(data){
+  if(!writer) return;
+  const encoder = new TextEncoder();
+  await writer.write(encoder.encode(data+"\n"));
+}
+
+// SPEECH
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const recognition = new SpeechRecognition();
+recognition.lang = "en-IN";
+
+function start(){
+  recognition.start();
+  document.getElementById("status").innerText = "Listening...";
+}
+
+recognition.onresult = function(e){
+  const text = e.results[0][0].transcript.toLowerCase();
+  document.getElementById("status").innerText = "You said: " + text;
+
+  process(text);
+
+  setTimeout(()=>{
+    document.getElementById("status").innerText = "Waiting...";
+  },2000);
+};
+
+// PROCESS COMMAND
+function process(text){
+
+  if(text.includes("light on")){
+    document.getElementById("light").innerText = "💡 Light ON";
+    document.getElementById("light").className = "btn on";
+    send("ON");
+  }
+
+  else if(text.includes("light off")){
+    document.getElementById("light").innerText = "💡 Light OFF";
+    document.getElementById("light").className = "btn off";
+    send("OFF");
+  }
+
+  else{
+    document.getElementById("status").innerText = "❌ I didn’t get that";
+  }
+}
+</script>
+
+</body>
+</html>
+</textarea>
+
+<button onclick="runCode()">▶ Run Code</button>
+</div>
+
+<!-- RIGHT PANEL -->
+<div class="right">
+  <iframe id="frame"></iframe>
+</div>
+
+<script>
+function runCode(){
+  document.getElementById("frame").srcdoc =
+    document.getElementById("code").value;
+}
+</script>
+
+</body>
+</html>
