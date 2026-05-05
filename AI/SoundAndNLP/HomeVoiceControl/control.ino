@@ -1,4 +1,4 @@
-int relayPin = 7;
+int relayPin = 13;
 
 void setup() {
   Serial.begin(9600);

@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-
 <title>Home Voice Control (Arduino)</title>
 
-<!-- CodeMirror (ONLY for editor panel) -->
+<!-- CodeMirror -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/htmlmixed/htmlmixed.min.js"></script>
 
 <style>
 body {
@@ -17,20 +17,38 @@ body {
   height: 100vh;
 }
 
+/* Panels */
 .left, .right {
   width: 50%;
+  display: flex;
+  flex-direction: column;
   padding: 10px;
   box-sizing: border-box;
 }
 
-textarea {
-  width: 100%;
-  height: 90%;
+/* CodeMirror full height + green theme */
+.CodeMirror {
+  flex: 1;
+  height: auto !important;
   background: #111;
   color: #0f0;
-  font-family: monospace;
 }
 
+.cm-s-default .CodeMirror-code {
+  color: #0f0;
+}
+
+.CodeMirror-cursor {
+  border-left: 1px solid #0f0;
+}
+
+.CodeMirror-gutters {
+  background: #111;
+  border-right: 1px solid #333;
+  color: #0f0;
+}
+
+/* Button */
 button {
   width: 100%;
   padding: 10px;
@@ -39,9 +57,9 @@ button {
   cursor: pointer;
 }
 
+/* Output frame */
 iframe {
-  width: 100%;
-  height: 90%;
+  flex: 1;
   border: none;
 }
 </style>
@@ -51,7 +69,7 @@ iframe {
 
 <!-- LEFT PANEL -->
 <div class="left">
-<textarea id="code">
+  <textarea id="code">
 <!DOCTYPE html>
 <html>
 <head>
@@ -99,7 +117,7 @@ let port;
 let writer;
 let recognition;
 
-// CONNECT TO ARDUINO
+// CONNECT
 async function connect() {
     if (!("serial" in navigator)) {
         alert("Web Serial API not supported");
@@ -109,30 +127,28 @@ async function connect() {
     try {
         port = await navigator.serial.requestPort();
         await port.open({ baudRate: 9600 });
-
         writer = port.writable.getWriter();
 
-        document.getElementById("arduinostatus").innerText = "Connected ✅ Say ON/OFF";
+        document.getElementById("arduinostatus").innerText = "Connected ✅";
 
     } catch (err) {
         alert("Connection failed: " + err.message);
     }
 }
 
-// SEND DATA
+// SEND
 async function send(data){
   if(!writer) return;
   const encoder = new TextEncoder();
   await writer.write(encoder.encode(data + "\n"));
 }
 
-// START VOICE
+// VOICE
 function start(){
-
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
   if (!SpeechRecognition) {
-    alert("Speech Recognition not supported in this browser");
+    alert("Speech Recognition not supported");
     return;
   }
 
@@ -142,44 +158,33 @@ function start(){
   recognition.onresult = function(e){
     const text = e.results[0][0].transcript.toLowerCase();
     document.getElementById("status").innerText = "You said: " + text;
-
     process(text);
-
-    setTimeout(()=>{
-      document.getElementById("status").innerText = "Waiting...";
-    },2000);
   };
 
   recognition.start();
   document.getElementById("status").innerText = "Listening...";
 }
 
-// PROCESS COMMAND
+// PROCESS
 function process(text){
-
   if(text.includes("light on")){
     document.getElementById("light").innerText = "💡 Light ON";
     document.getElementById("light").className = "btn on";
     send("ON");
   }
-
   else if(text.includes("light off")){
     document.getElementById("light").innerText = "💡 Light OFF";
     document.getElementById("light").className = "btn off";
     send("OFF");
-  }
-
-  else{
-    document.getElementById("status").innerText = "❌ I didn’t get that";
   }
 }
 </script>
 
 </body>
 </html>
-</textarea>
+  </textarea>
 
-<button onclick="runCode()">▶ Run Code</button>
+  <button onclick="runCode()">▶ Run Code</button>
 </div>
 
 <!-- RIGHT PANEL -->
@@ -188,11 +193,13 @@ function process(text){
 </div>
 
 <script>
-var editor = CodeMirror.fromTextArea(document.getElementById("code"), {
+const editor = CodeMirror.fromTextArea(document.getElementById("code"), {
   lineNumbers: true,
   mode: "htmlmixed",
   theme: "default"
 });
+
+editor.setSize("100%", "100%");
 
 function runCode(){
   document.getElementById("frame").srcdoc = editor.getValue();
