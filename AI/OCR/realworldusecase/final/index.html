@@ -187,6 +187,33 @@
             <input type="file" id="imageUpload" accept="image/*" style="display: none;">
             <button class="btn-primary" onclick="document.getElementById('imageUpload').click()">Upload Vehicle Image</button>
         </div>
+        <div style="margin-top:20px; width:100%; display:flex; gap:10px;">
+
+    <input type="file"
+           id="imageUploadBrowser"
+           accept="image/*"
+           style="display:none;">
+
+    <select id="repoImageSelect"
+            style="
+                flex:1;
+                background:#111;
+                color:white;
+                border:1px solid #00f2ff;
+                padding:10px;
+                border-radius:4px;
+            ">
+        <option value="../cars/car1.jpg">car1</option>
+        <option value="../cars/car2.webp">car2</option>
+        <option value="../cars/car3.png">car3</option>
+    </select>
+
+    <button class="btn-primary"
+            onclick="loadSelectedRepoImage()">
+        Open
+    </button>
+
+</div>
     </section>
 
     <!-- Controls & Results -->
@@ -222,6 +249,39 @@
     const plateCtx = plateCanvas.getContext('2d');
     const logContainer = document.getElementById('log-container');
     const loader = document.getElementById('global-loader');
+
+    function loadImageFromPath(path) {
+
+        const img = new Image();
+
+        img.onload = function() {
+
+            canvas.width = img.width;
+            canvas.height = img.height;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0);
+
+            log("Loaded repository image: " + path);
+
+            processImage(img);
+        };
+
+        img.onerror = function() {
+            log("Failed to load image: " + path);
+            alert("Could not load " + path);
+        };
+
+        img.src = path;
+    }
+
+    function loadSelectedRepoImage() {
+
+        const path =
+            document.getElementById("repoImageSelect").value;
+
+        loadImageFromPath(path);
+    }
 
     // 1. Initialize Models
     async function initModels() {
