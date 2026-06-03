@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>AI Arduino Music</title>
+
+  <style>
+    body {
+      background: #111;
+      color: white;
+      font-family: Arial;
+      text-align: center;
+      padding-top: 40px;
+    }
+
+    button {
+      padding: 15px;
+      margin: 10px;
+      font-size: 18px;
+    }
+  </style>
+</head>
+
+<body>
+
+<h1>AI Arduino Music Generator</h1>
+
+<button id="connectBtn">
+  Connect Arduino
+</button>
+
+<button id="generateBtn">
+  Generate AI Music
+</button>
+
+<p id="status">Loading...</p>
+
+<script type="module">
+
+import * as mm from "https://esm.sh/@magenta/music";
+
+let port;
+let writer;
+let model;
+let modelLoaded = false;
+
+const status =
+  document.getElementById("status");
+
+status.innerHTML = "Loading AI model...";
+
+model = new mm.MusicRNN(
+  "https://storage.googleapis.com/magentadata/js/checkpoints/music_rnn/basic_rnn"
+);
+
+await model.initialize();
+
+modelLoaded = true;
+
+status.innerHTML = "AI Model Ready!";
+
+document.getElementById("connectBtn")
+.addEventListener("click", connectArduino);
+
+document.getElementById("generateBtn")
+.addEventListener("click", generateMusic);
+
+async function connectArduino() {
+
+  port = await navigator.serial.requestPort();
+
+  await port.open({
+    baudRate: 115200
+  });
+
+  writer = port.writable.getWriter();
+
+  alert("Arduino Connected!");
+}
+
+function midiToFreq(midi) {
+
+  return Math.round(
+    440 * Math.pow(2, (midi - 69) / 12)
+  );
+}
+
+async function sendNote(freq, duration) {
+
+  const encoder = new TextEncoder();
+
+  await writer.write(
+    encoder.encode(`${freq},${duration}\n`)
+  );
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function generateMusic() {
+
+  if (!modelLoaded) {
+    alert("Model loading...");
+    return;
+  }
+
+  if (!writer) {
+    alert("Connect Arduino first!");
+    return;
+  }
+
+  status.innerHTML =
+    "Generating AI melody...";
+
+  const seed = {
+    notes: [
+      {
+        pitch: 60,
+        startTime: 0,
+        endTime: 0.5
+      },
+      {
+        pitch: 64,
+        startTime: 0.5,
+        endTime: 1
+      },
+      {
+        pitch: 67,
+        startTime: 1,
+        endTime: 1.5
+      }
+    ],
+    totalTime: 1.5
+  };
+
+  const result =
+    await model.continueSequence(
+      seed,
+      20,
+      1.1
+    );
+
+  for (const note of result.notes) {
+
+    const freq =
+      midiToFreq(note.pitch);
+
+    const duration =
+      (note.endTime - note.startTime) * 300;
+
+    console.log(freq);
+
+    await sendNote(freq, duration);
+
+    await sleep(duration + 20);
+  }
+
+  status.innerHTML = "Done!";
+}
+
+</script>
+
+</body>
+</html>
