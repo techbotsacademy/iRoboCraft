@@ -37,7 +37,6 @@ canvas{
 
 <h2>License Plate Recognition (No YOLO)</h2>
 
-<input type="file" id="fileInput" accept="image/*">
 
 <br>
 
@@ -45,10 +44,31 @@ canvas{
 
 <div id="status">Waiting for image...</div>
 <div id="result">Plate Number: -</div>
+    <select id="repoImageSelect"
+            style="
+                flex:1;
+                background:#111;
+                color:white;
+                border:1px solid #00f2ff;
+                padding:10px;
+                border-radius:4px;
+            ">
+        <option value="../cars/car1.jpg">car1</option>
+        <option value="../cars/car2.webp">car2</option>
+        <option value="../cars/car3.png">car3</option>
+    </select>
+
+    <button class="btn-primary"
+            onclick="loadSelectedRepoImage()">
+        Open
+    </button>
 
 <script>
 
 let cvReady = false;
+function log(message) {
+    console.log(message);
+}
 
 function initOpenCV() {
 
@@ -71,35 +91,38 @@ initOpenCV();
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 
-document.getElementById("fileInput")
-.addEventListener("change", function(e){
+    function loadImageFromPath(path) {
 
-    if(!cvReady){
-        alert("OpenCV still loading.");
-        return;
+        const img = new Image();
+
+        img.onload = function() {
+
+            canvas.width = img.width;
+            canvas.height = img.height;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0);
+
+            log("Loaded repository image: " + path);
+
+            detectPlate();
+        };
+
+        img.onerror = function() {
+            log("Failed to load image: " + path);
+            alert("Could not load " + path);
+        };
+
+        img.src = path;
     }
 
-    const file = e.target.files[0];
+    function loadSelectedRepoImage() {
 
-    if(!file) return;
+        const path =
+            document.getElementById("repoImageSelect").value;
 
-    const img = new Image();
-
-    img.onload = async function(){
-
-        canvas.width = img.width;
-        canvas.height = img.height;
-
-        ctx.drawImage(img,0,0);
-
-        document.getElementById("status").innerText =
-            "Searching for number plate...";
-
-        await detectPlate();
-    };
-
-    img.src = URL.createObjectURL(file);
-});
+        loadImageFromPath(path);
+    }
 
 async function detectPlate(){
 

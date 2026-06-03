@@ -32,7 +32,24 @@
 
 <h2>License Plate Recognition</h2>
 
-<input type="file" id="fileInput">
+    <select id="repoImageSelect"
+            style="
+                flex:1;
+                background:#111;
+                color:white;
+                border:1px solid #00f2ff;
+                padding:10px;
+                border-radius:4px;
+            ">
+        <option value="../cars/car1.jpg">car1</option>
+        <option value="../cars/car2.webp">car2</option>
+        <option value="../cars/car3.png">car3</option>
+    </select>
+
+    <button class="btn-primary"
+            onclick="loadSelectedRepoImage()">
+        Open
+    </button>
 
 <br><br>
 
@@ -42,31 +59,43 @@
 
 <script>
 
-const fileInput = document.getElementById("fileInput");
 const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
+function log(message) {
+    console.log(message);
+}
+    function loadImageFromPath(path) {
 
-fileInput.addEventListener("change", function(e){
+        const img = new Image();
 
-    const file = e.target.files[0];
+        img.onload = function() {
 
-    const img = new Image();
+            canvas.width = img.width;
+            canvas.height = img.height;
 
-    img.onload = async () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0);
 
-        canvas.width = img.width;
-        canvas.height = img.height;
+            log("Loaded repository image: " + path);
 
-        ctx.drawImage(img,0,0);
-
-        setTimeout(() => {
             detectPlate();
-        },1000);
+        };
 
-    };
+        img.onerror = function() {
+            log("Failed to load image: " + path);
+            alert("Could not load " + path);
+        };
 
-    img.src = URL.createObjectURL(file);
-});
+        img.src = path;
+    }
+
+    function loadSelectedRepoImage() {
+
+        const path =
+            document.getElementById("repoImageSelect").value;
+
+        loadImageFromPath(path);
+    }
 
 async function detectPlate(){
 
