@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>License Plate Detection (No YOLO)</title>
+
+<script async src="https://docs.opencv.org/4.x/opencv.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+<style>
+body{
+    font-family:Arial,sans-serif;
+    padding:20px;
+}
+
+canvas{
+    border:1px solid #ccc;
+    max-width:100%;
+    margin-top:15px;
+}
+
+#status{
+    margin-top:15px;
+    font-weight:bold;
+}
+
+#result{
+    margin-top:10px;
+    font-size:24px;
+    color:green;
+    font-weight:bold;
+}
+</style>
+</head>
+
+<body>
+
+<h2>License Plate Recognition (No YOLO)</h2>
+
+<input type="file" id="fileInput" accept="image/*">
+
+<br>
+
+<canvas id="canvas"></canvas>
+
+<div id="status">Waiting for image...</div>
+<div id="result">Plate Number: -</div>
+
+<script>
+
+let cvReady = false;
+
+function initOpenCV() {
+
+    if (typeof cv === "undefined") {
+        setTimeout(initOpenCV, 100);
+        return;
+    }
+
+    cv.onRuntimeInitialized = () => {
+
+        cvReady = true;
+
+        document.getElementById("status").innerText =
+            "OpenCV loaded.";
+    };
+}
+
+initOpenCV();
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+document.getElementById("fileInput")
+.addEventListener("change", function(e){
+
+    if(!cvReady){
+        alert("OpenCV still loading.");
+        return;
+    }
+
+    const file = e.target.files[0];
+
+    if(!file) return;
+
+    const img = new Image();
+
+    img.onload = async function(){
+
+        canvas.width = img.width;
+        canvas.height = img.height;
+
+        ctx.drawImage(img,0,0);
+
+        document.getElementById("status").innerText =
+            "Searching for number plate...";
+
+        await detectPlate();
+    };
+
+    img.src = URL.createObjectURL(file);
+});
+
+async function detectPlate(){
+
+    let src = cv.imread(canvas);
+
+    let gray = new cv.Mat();
+    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+
+    let blur = new cv.Mat();
+    cv.bilateralFilter(gray, blur, 11, 17, 17);
+
+    let edges = new cv.Mat();
+    cv.Canny(blur, edges, 30, 200);
+
+    let contours = new cv.MatVector();
+    let hierarchy = new cv.Mat();
+
+    cv.findContours(
+        edges,
+        contours,
+        hierarchy,
+        cv.RETR_TREE,
+        cv.CHAIN_APPROX_SIMPLE
+    );
+
+    let bestRect = null;
+    let bestScore = 0;
+
+    for(let i=0;i<contours.size();i++){
+
+        let contour = contours.get(i);
+
+        let peri = cv.arcLength(contour,true);
+
+        let approx = new cv.Mat();
+
+        cv.approxPolyDP(
+            contour,
+            approx,
+            0.02 * peri,
+            true
+        );
+
+        if(approx.rows === 4){
+
+            let rect = cv.boundingRect(approx);
+
+            let ratio =
+                rect.width / rect.height;
+
+            if(ratio < 2 || ratio > 6){
+
+                approx.delete();
+                continue;
+            }
+
+            if(rect.width < 60 ||
+               rect.height < 20){
+
+                approx.delete();
+                continue;
+            }
+
+            try{
+
+                let roi = gray.roi(
+                    new cv.Rect(
+                        rect.x,
+                        rect.y,
+                        rect.width,
+                        rect.height
+                    )
+                );
+
+                let meanBrightness =
+                    cv.mean(roi)[0];
+
+                let binary =
+                    new cv.Mat();
+
+                cv.threshold(
+                    roi,
+                    binary,
+                    0,
+                    255,
+                    cv.THRESH_BINARY +
+                    cv.THRESH_OTSU
+                );
+
+                let whitePixels =
+                    cv.countNonZero(binary);
+
+                let totalPixels =
+                    binary.rows *
+                    binary.cols;
+
+                let darkPixels =
+                    totalPixels -
+                    whitePixels;
+
+                let darkRatio =
+                    darkPixels /
+                    totalPixels;
+
+                let score = 0;
+
+                if(meanBrightness > 120)
+                    score += 50;
+
+                if(darkRatio > 0.05 &&
+                   darkRatio < 0.45)
+                    score += 50;
+
+                score +=
+                    rect.width *
+                    rect.height /
+                    1000;
+
+                if(score > bestScore){
+
+                    bestScore = score;
+
+                    bestRect = {
+                        x: rect.x,
+                        y: rect.y,
+                        width: rect.width,
+                        height: rect.height
+                    };
+                }
+
+                roi.delete();
+                binary.delete();
+
+            }catch(err){}
+
+        }
+
+        approx.delete();
+    }
+
+    if(!bestRect){
+
+        document.getElementById("status").innerText =
+            "No number plate found.";
+
+        cleanup(
+            src,gray,blur,
+            edges,contours,hierarchy
+        );
+
+        return;
+    }
+
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "red";
+
+    ctx.strokeRect(
+        bestRect.x,
+        bestRect.y,
+        bestRect.width,
+        bestRect.height
+    );
+
+    document.getElementById("status").innerText =
+        "Running OCR...";
+
+    await runOCR(bestRect);
+
+    cleanup(
+        src,gray,blur,
+        edges,contours,hierarchy
+    );
+}
+
+async function runOCR(rect){
+
+    const cropCanvas =
+        document.createElement("canvas");
+
+    cropCanvas.width =
+        rect.width;
+
+    cropCanvas.height =
+        rect.height;
+
+    const cropCtx =
+        cropCanvas.getContext("2d");
+
+    cropCtx.drawImage(
+        canvas,
+        rect.x,
+        rect.y,
+        rect.width,
+        rect.height,
+        0,
+        0,
+        rect.width,
+        rect.height
+    );
+
+    const { data } =
+        await Tesseract.recognize(
+            cropCanvas,
+            "eng",
+            {
+                logger:m=>console.log(m)
+            }
+        );
+
+    let text =
+        data.text
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g,'');
+
+    document.getElementById("status")
+        .innerText =
+        "Completed";
+
+    document.getElementById("result")
+        .innerText =
+        "Plate Number: " +
+        (text || "Not detected");
+}
+
+function cleanup(
+    src,
+    gray,
+    blur,
+    edges,
+    contours,
+    hierarchy
+){
+
+    src.delete();
+    gray.delete();
+    blur.delete();
+    edges.delete();
+    contours.delete();
+    hierarchy.delete();
+}
+
+</script>
+
+</body>
+</html>

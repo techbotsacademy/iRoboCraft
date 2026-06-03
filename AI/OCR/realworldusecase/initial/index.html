@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Number Plate Reader</title>
+
+    <script async
+        src="https://docs.opencv.org/4.x/opencv.js">
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+    <style>
+        body {
+            font-family: Arial;
+            padding: 20px;
+        }
+
+        canvas {
+            border: 1px solid #ccc;
+            max-width: 100%;
+            margin-top: 10px;
+        }
+
+        #result {
+            margin-top: 20px;
+            font-size: 24px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<h2>License Plate Recognition</h2>
+
+<input type="file" id="fileInput">
+
+<br><br>
+
+<canvas id="canvas"></canvas>
+
+<div id="result">Plate Number: -</div>
+
+<script>
+
+const fileInput = document.getElementById("fileInput");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+fileInput.addEventListener("change", function(e){
+
+    const file = e.target.files[0];
+
+    const img = new Image();
+
+    img.onload = async () => {
+
+        canvas.width = img.width;
+        canvas.height = img.height;
+
+        ctx.drawImage(img,0,0);
+
+        setTimeout(() => {
+            detectPlate();
+        },1000);
+
+    };
+
+    img.src = URL.createObjectURL(file);
+});
+
+async function detectPlate(){
+
+    let src = cv.imread(canvas);
+
+    let gray = new cv.Mat();
+
+    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+
+    let blur = new cv.Mat();
+
+    cv.bilateralFilter(
+        gray,
+        blur,
+        11,
+        17,
+        17
+    );
+
+    let edges = new cv.Mat();
+
+    cv.Canny(
+        blur,
+        edges,
+        30,
+        200
+    );
+
+    let contours = new cv.MatVector();
+
+    let hierarchy = new cv.Mat();
+
+    cv.findContours(
+        edges,
+        contours,
+        hierarchy,
+        cv.RETR_TREE,
+        cv.CHAIN_APPROX_SIMPLE
+    );
+
+    let bestRect = null;
+    let bestArea = 0;
+
+    for(let i=0;i<contours.size();i++){
+
+        let cnt = contours.get(i);
+
+        let peri = cv.arcLength(cnt,true);
+
+        let approx = new cv.Mat();
+
+        cv.approxPolyDP(
+            cnt,
+            approx,
+            0.02 * peri,
+            true
+        );
+
+        if(approx.rows === 4){
+
+            let rect =
+                cv.boundingRect(approx);
+
+            let ratio =
+                rect.width / rect.height;
+
+            let area =
+                rect.width * rect.height;
+
+            if(
+                ratio > 2 &&
+                ratio < 6 &&
+                area > bestArea
+            ){
+                bestArea = area;
+                bestRect = rect;
+            }
+        }
+
+        approx.delete();
+        cnt.delete();
+    }
+
+    if(!bestRect){
+
+        document.getElementById("result")
+            .innerText =
+            "No plate found";
+
+        return;
+    }
+
+    ctx.strokeStyle = "red";
+    ctx.lineWidth = 3;
+
+    ctx.strokeRect(
+        bestRect.x,
+        bestRect.y,
+        bestRect.width,
+        bestRect.height
+    );
+
+    let crop =
+        document.createElement("canvas");
+
+    crop.width = bestRect.width;
+    crop.height = bestRect.height;
+
+    crop.getContext("2d").drawImage(
+        canvas,
+        bestRect.x,
+        bestRect.y,
+        bestRect.width,
+        bestRect.height,
+        0,
+        0,
+        bestRect.width,
+        bestRect.height
+    );
+
+    const { data } =
+        await Tesseract.recognize(
+            crop,
+            "eng"
+        );
+
+    let plate =
+        data.text
+        .replace(/[^A-Z0-9]/gi,'')
+        .toUpperCase();
+
+    document.getElementById("result")
+        .innerText =
+        "Plate Number: " + plate;
+
+    src.delete();
+    gray.delete();
+    blur.delete();
+    edges.delete();
+    contours.delete();
+    hierarchy.delete();
+}
+
+</script>
+
+</body>
+</html>
