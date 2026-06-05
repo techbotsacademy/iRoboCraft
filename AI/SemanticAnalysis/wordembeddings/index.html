@@ -1,642 +1,684 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Word Vector Playground</title>
-
 <style>
-body{
-    font-family:Arial,sans-serif;
-    margin:20px;
-}
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-h2{
-    margin-bottom:5px;
-}
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-#status{
-    margin-bottom:15px;
-    color:#555;
-}
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #0a0a0f;
+    color: #e8e8f0;
+    min-height: 100vh;
+    padding: 0;
+    overflow-x: hidden;
+  }
 
-.input-container{
-    position:relative;
-    width:900px;
-    max-width:100%;
-}
+  .bg-grid {
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(100,80,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(100,80,255,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
 
-#input{
-    width:100%;
-    padding:12px;
-    font-size:16px;
-    box-sizing:border-box;
-}
+  .bg-glow {
+    position: fixed;
+    width: 600px; height: 600px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(99,60,220,0.12) 0%, transparent 70%);
+    top: -200px; left: -200px;
+    pointer-events: none;
+    z-index: 0;
+  }
 
-#suggestions{
-    position:absolute;
-    top:100%;
-    left:0;
-    right:0;
-    border:1px solid #ccc;
-    border-top:none;
-    background:white;
-    max-height:250px;
-    overflow-y:auto;
-    z-index:1000;
-}
+  .bg-glow2 {
+    position: fixed;
+    width: 400px; height: 400px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,200,150,0.08) 0%, transparent 70%);
+    bottom: 0; right: -100px;
+    pointer-events: none;
+    z-index: 0;
+  }
 
-.suggestion{
-    padding:8px;
-    cursor:pointer;
-}
+  .app {
+    position: relative;
+    z-index: 1;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
 
-.suggestion:hover{
-    background:#f0f0f0;
-}
+  .header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
 
-button{
-    margin-top:10px;
-    padding:10px 16px;
-    font-size:16px;
-    cursor:pointer;
-}
+  .header-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(99,60,220,0.15);
+    border: 1px solid rgba(99,60,220,0.3);
+    border-radius: 100px;
+    padding: 4px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #a08bff;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
 
-table{
-    border-collapse:collapse;
-    width:100%;
-    margin-top:20px;
-}
+  .header-badge span { font-size: 14px; }
 
-th,td{
-    border:1px solid #ccc;
-    padding:8px;
-    text-align:left;
-}
+  h1 {
+    font-size: 42px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #fff 30%, #a08bff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.1;
+    margin-bottom: 12px;
+  }
 
-th{
-    background:#f5f5f5;
-}
+  .subtitle {
+    font-size: 16px;
+    color: rgba(232,232,240,0.5);
+    max-width: 500px;
+    margin: 0 auto;
+  }
 
-.vector-box{
-    margin-top:20px;
-    padding:10px;
-    border:1px solid #ccc;
-    background:#fafafa;
-    font-family:monospace;
-    white-space:pre-wrap;
-    word-break:break-all;
-}
+  .status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 32px;
+    font-size: 13px;
+    color: rgba(232,232,240,0.45);
+  }
 
-.example{
-    color:#666;
-    margin-bottom:10px;
-}
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #f59e0b;
+    animation: pulse 1.5s infinite;
+  }
+
+  .status-dot.loaded { background: #10b981; animation: none; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .examples {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 32px;
+  }
+
+  .example-chip {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 100px;
+    padding: 5px 14px;
+    font-size: 12px;
+    font-family: 'Courier New', monospace;
+    color: rgba(232,232,240,0.6);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .example-chip:hover {
+    background: rgba(99,60,220,0.15);
+    border-color: rgba(99,60,220,0.4);
+    color: #a08bff;
+  }
+
+  .card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 20px;
+    padding: 28px;
+    backdrop-filter: blur(10px);
+    margin-bottom: 24px;
+  }
+
+  .mode-tabs {
+    display: flex;
+    gap: 6px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 12px;
+    padding: 4px;
+    margin-bottom: 20px;
+  }
+
+  .mode-tab {
+    flex: 1;
+    padding: 9px;
+    border-radius: 9px;
+    border: none;
+    background: transparent;
+    color: rgba(232,232,240,0.45);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'Inter', sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .mode-tab.active {
+    background: rgba(99,60,220,0.25);
+    color: #c4b5fd;
+    border: 1px solid rgba(99,60,220,0.4);
+  }
+
+  .mode-tab:hover:not(.active) {
+    background: rgba(255,255,255,0.05);
+    color: rgba(232,232,240,0.7);
+  }
+
+  .mode-icon { font-size: 15px; }
+
+  .input-wrap {
+    position: relative;
+    margin-bottom: 16px;
+  }
+
+  #input {
+    width: 100%;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 12px;
+    padding: 14px 50px 14px 16px;
+    font-size: 16px;
+    color: #e8e8f0;
+    font-family: 'Courier New', monospace;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  #input:focus {
+    border-color: rgba(99,60,220,0.5);
+    box-shadow: 0 0 0 3px rgba(99,60,220,0.1);
+  }
+
+  #input::placeholder { color: rgba(232,232,240,0.25); }
+
+  .input-icon {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 18px;
+    color: rgba(232,232,240,0.25);
+    pointer-events: none;
+  }
+
+  #suggestions {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0; right: 0;
+    background: #13131f;
+    border: 1px solid rgba(99,60,220,0.3);
+    border-radius: 12px;
+    overflow: hidden;
+    z-index: 1000;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+
+  #suggestions:empty { display: none; }
+
+  .suggestion {
+    padding: 9px 14px;
+    font-size: 13px;
+    font-family: 'Courier New', monospace;
+    color: rgba(232,232,240,0.7);
+    cursor: pointer;
+    transition: background 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .suggestion::before {
+    content: '→';
+    color: rgba(99,60,220,0.5);
+    font-size: 11px;
+  }
+
+  .suggestion:hover { background: rgba(99,60,220,0.15); color: #c4b5fd; }
+
+  .run-btn {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, #5b3dd1 0%, #7c5bf0 100%);
+    border: none;
+    border-radius: 12px;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    letter-spacing: 0.01em;
+  }
+
+  .run-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 25px rgba(99,60,220,0.35); }
+  .run-btn:active { transform: translateY(0); }
+
+  .run-btn .btn-icon { font-size: 17px; }
+
+  #results { }
+
+  .results-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 20px;
+    overflow: hidden;
+  }
+
+  .results-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .results-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #e8e8f0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .results-title-icon { font-size: 16px; color: #a08bff; }
+
+  .results-count {
+    font-size: 12px;
+    color: rgba(232,232,240,0.4);
+    background: rgba(255,255,255,0.06);
+    padding: 3px 10px;
+    border-radius: 100px;
+  }
+
+  .results-table-wrap { overflow-x: auto; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  thead tr {
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+
+  thead th {
+    padding: 10px 20px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(232,232,240,0.35);
+  }
+
+  tbody tr {
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    transition: background 0.15s;
+  }
+
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: rgba(99,60,220,0.07); }
+
+  tbody td {
+    padding: 11px 20px;
+    font-size: 14px;
+  }
+
+  .rank-cell {
+    color: rgba(232,232,240,0.3);
+    font-size: 12px;
+    font-weight: 600;
+    width: 48px;
+  }
+
+  .rank-cell.top { color: #a08bff; }
+
+  .word-cell {
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    color: #e8e8f0;
+    font-weight: 500;
+  }
+
+  .score-cell {
+    text-align: right;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+  }
+
+  .score-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: flex-end;
+  }
+
+  .score-bar {
+    width: 80px;
+    height: 4px;
+    background: rgba(255,255,255,0.07);
+    border-radius: 100px;
+    overflow: hidden;
+  }
+
+  .score-bar-fill {
+    height: 100%;
+    border-radius: 100px;
+    background: linear-gradient(90deg, #5b3dd1, #a08bff);
+    transition: width 0.4s ease;
+  }
+
+  .score-val {
+    color: rgba(232,232,240,0.5);
+    font-size: 12px;
+    min-width: 60px;
+    text-align: right;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 48px 24px;
+    color: rgba(232,232,240,0.3);
+    font-size: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .empty-icon { font-size: 32px; color: rgba(99,60,220,0.3); }
+
+  @media (max-width: 600px) {
+    h1 { font-size: 28px; }
+    .app { padding: 32px 16px 60px; }
+    .card { padding: 20px; }
+    .score-bar { width: 50px; }
+  }
 </style>
-
 </head>
-
 <body>
 
-<h2>Word Vector Playground</h2>
+<div class="bg-grid"></div>
+<div class="bg-glow"></div>
+<div class="bg-glow2"></div>
 
-<div class="example">
-Examples:
-<br>
-king-man+woman
-<br>
-walking-walk+swim
-</br>
-<br>
-bigger-big+small
-</br>
+<div class="app">
+
+  <div class="header">
+    <div class="header-badge"><span>✦</span> AI Embeddings</div>
+    <h1>Word Vector<br>Playground</h1>
+    <p class="subtitle">Explore semantic relationships between words using vector space mathematics</p>
+  </div>
+
+  <div class="status-bar">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="status">Loading embeddings...</span>
+  </div>
+
+  <div class="examples">
+    <span class="example-chip" onclick="setExample('king-man+woman')">king − man + woman</span>
+    <span class="example-chip" onclick="setExample('walking-walk+swim')">walking − walk + swim</span>
+    <span class="example-chip" onclick="setExample('bigger-big+small')">bigger − big + small</span>
+    <span class="example-chip" onclick="setExample('paris-france+italy')">paris − france + italy</span>
+  </div>
+
+  <div class="card">
+    <div class="mode-tabs">
+      <button class="mode-tab active" onclick="setMode('analogy')" id="tab-analogy">
+        <span class="mode-icon">⟳</span> Analogy
+      </button>
+      <button class="mode-tab" onclick="setMode('similar')" id="tab-similar">
+        <span class="mode-icon">◎</span> Similar
+      </button>
+      <button class="mode-tab" onclick="setMode('opposite')" id="tab-opposite">
+        <span class="mode-icon">⇌</span> Opposite
+      </button>
+    </div>
+
+    <div class="input-wrap">
+      <input id="input" type="text" autocomplete="off" placeholder="king-man+woman" spellcheck="false">
+      <div class="input-icon">⌨</div>
+      <div id="suggestions"></div>
+    </div>
+
+    <button class="run-btn" onclick="run()">
+      <span class="btn-icon">⚡</span> Compute Vectors
+    </button>
+  </div>
+
+  <div id="results">
+    <div class="results-card">
+      <div class="empty-state">
+        <div class="empty-icon">◈</div>
+        <span>Enter an expression and click Compute Vectors</span>
+      </div>
+    </div>
+  </div>
+
 </div>
-
-<div id="status">Loading embeddings...</div>
-
-<select id="mode">
-    <option value="analogy">Analogy</option>
-    <option value="similar">Similar</option>
-    <option value="opposite">Opposite</option>
-</select>
-
-<br><br>
-
-<div class="input-container">
-    <input
-        id="input"
-        type="text"
-        autocomplete="off"
-        placeholder="king-man+woman">
-    <div id="suggestions"></div>
-</div>
-
-<button onclick="run()">Compute</button>
-
-<div id="results"></div>
 
 <script>
-
 let embeddings = {};
 let vocabulary = [];
 let OPPOSITE_AXIS = null;
+let currentMode = 'analogy';
 
-async function loadEmbeddings(){
-
-    embeddings =
-        await fetch("embeddings.json")
-        .then(r => r.json());
-
-    vocabulary =
-        Object.keys(embeddings);
-
-document.getElementById("status").innerHTML =
-    "Loaded " +
-    vocabulary.length.toLocaleString() +
-    " words";
-
-OPPOSITE_AXIS =
-    buildOppositionAxis();
+function setMode(m) {
+  currentMode = m;
+  ['analogy','similar','opposite'].forEach(t => {
+    document.getElementById('tab-' + t).classList.toggle('active', t === m);
+  });
+  const ph = { analogy: 'king-man+woman', similar: 'happy', opposite: 'happy' };
+  document.getElementById('input').placeholder = ph[m];
 }
 
-function cosine(a,b){
-
-    let dot=0;
-    let normA=0;
-    let normB=0;
-
-    for(let i=0;i<a.length;i++){
-
-        dot += a[i]*b[i];
-        normA += a[i]*a[i];
-        normB += b[i]*b[i];
-    }
-
-    return dot /
-        (Math.sqrt(normA) *
-         Math.sqrt(normB));
+function setExample(expr) {
+  setMode('analogy');
+  document.getElementById('input').value = expr;
 }
 
-function nearestVector(
-    vector,
-    limit = 20,
-    excludedWords = []
-){
-
-    const excluded =
-        new Set(excludedWords);
-
-    const results = [];
-
-    for(const word of vocabulary){
-
-        if(excluded.has(word))
-            continue;
-
-        results.push({
-            word,
-            score: cosine(
-                vector,
-                embeddings[word]
-            )
-        });
-    }
-
-    results.sort(
-        (a,b)=>b.score-a.score
-    );
-
-    return results.slice(0,limit);
+async function loadEmbeddings() {
+  embeddings = await fetch("embeddings.json").then(r => r.json());
+  vocabulary = Object.keys(embeddings);
+  document.getElementById("status").textContent = "Loaded " + vocabulary.length.toLocaleString() + " words";
+  document.getElementById("statusDot").classList.add("loaded");
+  OPPOSITE_AXIS = buildOppositionAxis();
 }
 
-function parseExpression(expr){
-
-    expr = expr
-        .split("≈")[0]
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g,"");
-
-    const tokens =
-        expr.match(/[+-]|[a-zA-Z_]+/g);
-
-    if(!tokens)
-        return null;
-
-    let result = null;
-    let op = "+";
-
-    const usedWords = [];
-
-    for(const token of tokens){
-
-        if(token==="+" ||
-           token==="-"){
-
-            op = token;
-            continue;
-        }
-
-        if(!embeddings[token])
-            continue;
-
-        usedWords.push(token);
-
-        const vec =
-            embeddings[token];
-
-        if(result===null){
-
-            result = [...vec];
-        }
-        else{
-
-            for(let i=0;i<vec.length;i++){
-
-                if(op==="+")
-
-                    result[i]+=vec[i];
-
-                else
-
-                    result[i]-=vec[i];
-            }
-        }
-    }
-
-    return {
-        vector: result,
-        usedWords
-    };
+function cosine(a, b) {
+  let dot = 0, normA = 0, normB = 0;
+  for (let i = 0; i < a.length; i++) { dot += a[i]*b[i]; normA += a[i]*a[i]; normB += b[i]*b[i]; }
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
-function similar(word){
-
-    if(!embeddings[word])
-        return [];
-
-    const vec = embeddings[word];
-
-    const results = [];
-
-    for(const candidate of vocabulary){
-
-        if(candidate === word)
-            continue;
-
-        results.push({
-            word: candidate,
-            score: cosine(
-                vec,
-                embeddings[candidate]
-            )
-        });
-    }
-
-    results.sort(
-        (a,b)=>b.score-a.score
-    );
-
-    return results.slice(0,20);
+function nearestVector(vector, limit = 20, excludedWords = []) {
+  const excluded = new Set(excludedWords);
+  const results = [];
+  for (const word of vocabulary) {
+    if (excluded.has(word)) continue;
+    results.push({ word, score: cosine(vector, embeddings[word]) });
+  }
+  results.sort((a, b) => b.score - a.score);
+  return results.slice(0, limit);
 }
 
-function buildOppositionAxis(){
-
-    const pairs = [
-        ["good","bad"],
-        ["happy","sad"],
-        ["hot","cold"],
-        ["strong","weak"],
-        ["large","small"],
-        ["young","old"]
-    ];
-
-    const dim =
-        embeddings[
-            Object.keys(embeddings)[0]
-        ].length;
-
-    const axis =
-        new Array(dim).fill(0);
-
-    for(const [pos,neg] of pairs){
-
-        if(
-            !embeddings[pos] ||
-            !embeddings[neg]
-        ){
-            continue;
-        }
-
-        for(let i=0;i<dim;i++){
-
-            axis[i] +=
-                embeddings[pos][i]
-                -
-                embeddings[neg][i];
-        }
-    }
-
-    const norm =
-        Math.sqrt(
-            axis.reduce(
-                (s,v)=>s+v*v,
-                0
-            )
-        );
-
-    return axis.map(
-        v=>v/norm
-    );
+function parseExpression(expr) {
+  expr = expr.split("≈")[0].trim().toLowerCase().replace(/\s+/g, "");
+  const tokens = expr.match(/[+-]|[a-zA-Z_]+/g);
+  if (!tokens) return null;
+  let result = null, op = "+";
+  const usedWords = [];
+  for (const token of tokens) {
+    if (token === "+" || token === "-") { op = token; continue; }
+    if (!embeddings[token]) continue;
+    usedWords.push(token);
+    const vec = embeddings[token];
+    if (result === null) { result = [...vec]; }
+    else { for (let i = 0; i < vec.length; i++) { result[i] += op === "+" ? vec[i] : -vec[i]; } }
+  }
+  return { vector: result, usedWords };
 }
 
-function opposite(word){
-
-    if(!embeddings[word])
-        return [];
-
-    const vector =
-        embeddings[word];
-
-    let projection = 0;
-
-    for(let i=0;i<vector.length;i++){
-
-        projection +=
-            vector[i] *
-            OPPOSITE_AXIS[i];
-    }
-
-    const reflected =
-        vector.map(
-            (value,index)=>
-                value -
-                2 *
-                projection *
-                OPPOSITE_AXIS[index]
-        );
-
-    return nearestVector(
-        reflected,
-        20,
-        [word]
-    );
+function similar(word) {
+  if (!embeddings[word]) return [];
+  const vec = embeddings[word];
+  const results = [];
+  for (const candidate of vocabulary) {
+    if (candidate === word) continue;
+    results.push({ word: candidate, score: cosine(vec, embeddings[candidate]) });
+  }
+  results.sort((a, b) => b.score - a.score);
+  return results.slice(0, 20);
 }
 
-function run(){
-
-    const mode =
-        document
-        .getElementById("mode")
-        .value;
-
-    const input =
-        document
-        .getElementById("input")
-        .value
-        .trim()
-        .toLowerCase();
-
-    let rows = [];
-    let title = "";
-
-    if(mode==="similar"){
-
-        rows =
-            similar(input);
-
-        title =
-            "Most Similar Words";
-    }
-
-    else if(mode==="opposite"){
-
-        rows =
-            opposite(input);
-
-        title =
-            "Most Opposite Words";
-    }
-
-    else{
-
-        const parsed =
-            parseExpression(
-                input
-            );
-
-        if(!parsed){
-
-            alert(
-                "Could not compute expression."
-            );
-            return;
-        }
-
-        rows =
-            nearestVector(
-                parsed.vector,
-                20,
-                parsed.usedWords
-            );
-
-        title =
-            "Analogy Results";
-    }
-
-    let html = `
-    <h3>${title}</h3>
-
-    <table>
-
-    <tr>
-        <th>Rank</th>
-        <th>Word</th>
-        <th>Similarity</th>
-    </tr>
-    `;
-
-    rows.forEach((row,index)=>{
-
-        html += `
-        <tr>
-            <td>${index+1}</td>
-            <td>${row.word}</td>
-            <td>${row.score.toFixed(6)}</td>
-        </tr>
-        `;
-    });
-
-    html += "</table>";
-
-    document
-        .getElementById("results")
-        .innerHTML = html;
+function buildOppositionAxis() {
+  const pairs = [["good","bad"],["happy","sad"],["hot","cold"],["strong","weak"],["large","small"],["young","old"]];
+  const dim = embeddings[Object.keys(embeddings)[0]].length;
+  const axis = new Array(dim).fill(0);
+  for (const [pos, neg] of pairs) {
+    if (!embeddings[pos] || !embeddings[neg]) continue;
+    for (let i = 0; i < dim; i++) axis[i] += embeddings[pos][i] - embeddings[neg][i];
+  }
+  const norm = Math.sqrt(axis.reduce((s, v) => s + v * v, 0));
+  return axis.map(v => v / norm);
 }
 
-const input =
-    document.getElementById("input");
-
-input.addEventListener(
-    "input",
-    function(){
-
-const mode =
-    document
-    .getElementById("mode")
-    .value;
-
-let currentWord;
-
-if(mode==="analogy"){
-
-    currentWord =
-        this.value
-            .split(/[+-]/)
-            .pop()
-            .replace(/≈.*/,"")
-            .trim()
-            .toLowerCase();
-}
-else{
-
-    currentWord =
-        this.value
-            .trim()
-            .toLowerCase();
-}
-        const box =
-            document.getElementById(
-                "suggestions"
-            );
-
-        if(currentWord.length===0){
-
-            box.innerHTML="";
-            return;
-        }
-
-        const matches =
-            vocabulary
-            .filter(
-                w => w.startsWith(
-                    currentWord
-                )
-            )
-            .slice(0,20);
-
-        box.innerHTML =
-            matches.map(
-                word => `
-                <div
-                class="suggestion"
-                onclick="insertWord('${word}')">
-                ${word}
-                </div>
-                `
-            ).join("");
-    }
-);
-
-function insertWord(word){
-
-    const mode =
-        document
-        .getElementById("mode")
-        .value;
-
-    const textbox =
-        document.getElementById("input");
-
-    if(mode!=="analogy"){
-
-        textbox.value = word;
-
-        document.getElementById(
-            "suggestions"
-        ).innerHTML = "";
-
-        return;
-    }
-
-    const value =
-        textbox.value;
-
-    const parts =
-        value.split(/[+-]/);
-
-    parts[parts.length-1] =
-        word;
-
-    let rebuilt = "";
-    let idx = 0;
-
-    for(let i=0;i<value.length;i++){
-
-        const c = value[i];
-
-        if(c==="+" || c==="-"){
-
-            rebuilt +=
-                parts[idx++];
-
-            rebuilt += c;
-        }
-    }
-
-    rebuilt += parts[idx];
-
-    textbox.value =
-        rebuilt;
-
-    document.getElementById(
-        "suggestions"
-    ).innerHTML = "";
+function opposite(word) {
+  if (!embeddings[word]) return [];
+  const vector = embeddings[word];
+  let projection = 0;
+  for (let i = 0; i < vector.length; i++) projection += vector[i] * OPPOSITE_AXIS[i];
+  const reflected = vector.map((value, index) => value - 2 * projection * OPPOSITE_AXIS[index]);
+  return nearestVector(reflected, 20, [word]);
 }
 
-document.addEventListener(
-    "click",
-    function(e){
+function run() {
+  const input = document.getElementById("input").value.trim().toLowerCase();
+  let rows = [], title = "", icon = "◈";
 
-        if(!e.target.classList.contains(
-            "suggestion")){
+  if (currentMode === "similar") {
+    rows = similar(input); title = "Most Similar Words"; icon = "◎";
+  } else if (currentMode === "opposite") {
+    rows = opposite(input); title = "Most Opposite Words"; icon = "⇌";
+  } else {
+    const parsed = parseExpression(input);
+    if (!parsed) { alert("Could not compute expression."); return; }
+    rows = nearestVector(parsed.vector, 20, parsed.usedWords);
+    title = "Analogy Results"; icon = "⟳";
+  }
 
-            document.getElementById(
-                "suggestions"
-            ).innerHTML="";
-        }
-    }
-);
+  const maxScore = rows.length > 0 ? rows[0].score : 1;
+  let tbodyHtml = "";
+  rows.forEach((row, i) => {
+    const pct = ((row.score / maxScore) * 100).toFixed(1);
+    const isTop = i < 3;
+    tbodyHtml += `<tr>
+      <td class="rank-cell ${isTop ? 'top' : ''}">#${i+1}</td>
+      <td class="word-cell">${row.word}</td>
+      <td class="score-cell">
+        <div class="score-bar-wrap">
+          <div class="score-bar"><div class="score-bar-fill" style="width:${pct}%"></div></div>
+          <span class="score-val">${row.score.toFixed(6)}</span>
+        </div>
+      </td>
+    </tr>`;
+  });
 
-document
-.getElementById("mode")
-.addEventListener(
-    "change",
-    function(){
+  document.getElementById("results").innerHTML = `
+    <div class="results-card">
+      <div class="results-header">
+        <div class="results-title"><span class="results-title-icon">${icon}</span> ${title}</div>
+        <span class="results-count">${rows.length} results</span>
+      </div>
+      <div class="results-table-wrap">
+        <table>
+          <thead><tr><th>Rank</th><th>Word</th><th style="text-align:right">Similarity Score</th></tr></thead>
+          <tbody>${tbodyHtml}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
 
-        const input =
-            document
-            .getElementById("input");
+const inputEl = document.getElementById("input");
+inputEl.addEventListener("input", function() {
+  let currentWord;
+  if (currentMode === "analogy") {
+    currentWord = this.value.split(/[+-]/).pop().replace(/≈.*/,"").trim().toLowerCase();
+  } else {
+    currentWord = this.value.trim().toLowerCase();
+  }
+  const box = document.getElementById("suggestions");
+  if (currentWord.length === 0) { box.innerHTML = ""; return; }
+  const matches = vocabulary.filter(w => w.startsWith(currentWord)).slice(0, 20);
+  box.innerHTML = matches.map(word => `<div class="suggestion" onclick="insertWord('${word}')">${word}</div>`).join("");
+});
 
-        if(
-            this.value==="analogy"
-        ){
+function insertWord(word) {
+  const textbox = document.getElementById("input");
+  if (currentMode !== "analogy") {
+    textbox.value = word;
+    document.getElementById("suggestions").innerHTML = "";
+    return;
+  }
+  const value = textbox.value;
+  const parts = value.split(/[+-]/);
+  parts[parts.length - 1] = word;
+  let rebuilt = "", idx = 0;
+  for (let i = 0; i < value.length; i++) {
+    const c = value[i];
+    if (c === "+" || c === "-") { rebuilt += parts[idx++]; rebuilt += c; }
+  }
+  rebuilt += parts[idx];
+  textbox.value = rebuilt;
+  document.getElementById("suggestions").innerHTML = "";
+}
 
-            input.placeholder =
-                "king-man+woman";
-        }
-        else{
+document.addEventListener("click", function(e) {
+  if (!e.target.classList.contains("suggestion")) document.getElementById("suggestions").innerHTML = "";
+});
 
-            input.placeholder =
-                "happy";
-        }
-    }
-);
+inputEl.addEventListener("keydown", function(e) {
+  if (e.key === "Enter") run();
+});
 
 loadEmbeddings();
-
 </script>
-
 </body>
 </html>
