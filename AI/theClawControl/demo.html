@@ -134,7 +134,7 @@ async function sendAngle(angle) {
   if (!writer) return;
   const now = Date.now();
   if (now - lastSentTime < sendDelay) return;
-  const data = new TextEncoder().encode(angle + "\n");
+  const data = new TextEncoder().encode((90-angle) + "\n");
   await writer.write(data);
   lastSentTime = now;
 }
