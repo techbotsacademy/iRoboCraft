@@ -147,10 +147,13 @@
       <div class="draw-header">
         <strong style="font-size:1rem">Draw Here</strong>
         <div>Drawing: <span class="badge" id="badge">0</span></div>
+        <div>Black and white: <span class="badge" id="badgebw">0</span></div>
+        <div>Input to AI: <span class="badge" id="badgepixels">0</span></div>
       </div>
       <div class="canvas-wrap">
         <canvas id="drawCanvas" width="250" height="250"></canvas>
         <div class="row">
+          
           <button class="btn btn-pink" onclick="addSample()">✅ Add Sample</button>
           <button class="btn btn-gray" onclick="clearDraw()">🗑 Clear</button>
           <button class="btn btn-red" onclick="undoLast()">↩ Undo</button>
