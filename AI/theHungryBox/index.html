@@ -1,108 +1,643 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Mouth Open Close Detection</title>
-
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>HaggyBox — AI Mouth Detector</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
   <style>
-    body {
-      text-align: center;
-      background: #111;
-      color: white;
-      font-family: Arial;
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0c0c12;
+      --card: #16161f;
+      --card2: #1e1e2a;
+      --border: rgba(255,255,255,0.07);
+      --border-s: rgba(255,255,255,0.13);
+      --text: #eeeef2;
+      --muted: #7a7a88;
+      --blue: #4f8ef7;
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --red: #ef4444;
+      --r: 12px;
     }
-    video {
-      border: 2px solid cyan;
-      border-radius: 10px;
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 1.5rem 1rem 3rem;
+      gap: 1.25rem;
+    }
+    .hdr { text-align: center; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 11px; font-weight: 500; letter-spacing: 1.1px;
+      text-transform: uppercase; color: var(--blue);
+      background: rgba(79,142,247,0.1); border: 1px solid rgba(79,142,247,0.25);
+      border-radius: 100px; padding: 4px 14px; margin-bottom: 10px;
+    }
+    .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+    h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.5px; }
+    .sub { font-size: 13px; color: var(--muted); margin-top: 5px; }
+
+    .status-pill {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 100px; padding: 8px 18px;
+      font-size: 13px; color: var(--muted);
+      width: 100%; max-width: 820px;
+    }
+    .dot {
+      width: 9px; height: 9px; border-radius: 50%; background: var(--muted);
+      flex-shrink: 0; transition: background 0.3s, box-shadow 0.3s;
+    }
+    .dot.ok   { background: var(--green); box-shadow: 0 0 7px var(--green); }
+    .dot.open { background: var(--blue);  box-shadow: 0 0 7px var(--blue); }
+    .dot.warn { background: var(--amber); box-shadow: 0 0 7px var(--amber); }
+    .dot.err  { background: var(--red);   box-shadow: 0 0 7px var(--red); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 1rem;
+      width: 100%;
+      max-width: 820px;
+    }
+    @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 1.25rem;
+      display: flex; flex-direction: column; gap: 1rem;
+    }
+    .card.full { grid-column: 1 / -1; }
+    .card-label {
+      font-size: 10px; font-weight: 500;
+      letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted);
+    }
+
+    /* Camera */
+    .cam-wrap {
+      position: relative; border-radius: 8px;
+      overflow: hidden; background: #000;
+      aspect-ratio: 4/3; width: 100%;
+    }
+    #inputVideo {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      object-fit: cover; transform: scaleX(-1); opacity: 0;
+    }
+    #outputCanvas { width: 100%; height: 100%; display: block; }
+    .cam-badge {
+      position: absolute; top: 8px; left: 8px;
+      background: rgba(0,0,0,0.65);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 100px; padding: 3px 10px;
+      font-size: 11px; color: #fff;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .rec-dot { width: 7px; height: 7px; border-radius: 50%; background: #555; }
+
+    /* State display */
+    .state-block {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 8px; padding: 1rem 0;
+    }
+    .state-icon { font-size: 64px; line-height: 1; }
+    .state-word {
+      font-size: 28px; font-weight: 600; letter-spacing: -0.5px;
+    }
+    .state-word.open-c  { color: var(--blue); }
+    .state-word.close-c { color: var(--amber); }
+
+    /* MAR bar */
+    .mar-wrap { display: flex; flex-direction: column; gap: 6px; }
+    .mar-bar-bg {
+      width: 100%; height: 10px;
+      background: var(--card2); border-radius: 100px; overflow: hidden;
+    }
+    .mar-bar {
+      height: 100%; width: 0%;
+      background: var(--blue); border-radius: 100px;
+      transition: width 0.1s, background 0.2s;
+    }
+    .mar-row { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+    .mar-val { font-weight: 500; color: var(--text); }
+
+    /* Threshold */
+    .thresh-row { display: flex; align-items: center; gap: 10px; }
+    .thresh-row label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+    .thresh-row input[type=range] { flex: 1; accent-color: var(--blue); }
+    .thresh-val { font-size: 13px; font-weight: 500; min-width: 36px; text-align: right; }
+
+    /* Stats */
+    .stats-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+    .stat-box {
+      background: var(--card2); border-radius: 8px;
+      padding: 10px 12px; text-align: center;
+      border: 1px solid var(--border);
+    }
+    .stat-num { font-size: 20px; font-weight: 600; }
+    .stat-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    /* Buttons */
+    .btn {
+      width: 100%; padding: 12px 18px;
+      border-radius: var(--r);
+      border: 1px solid var(--border-s);
+      background: var(--card2);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      font-size: 14px; font-weight: 500;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: all 0.15s;
+    }
+    .btn:hover { background: #26263a; border-color: rgba(255,255,255,0.2); }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+    .btn.blue  { border-color: rgba(79,142,247,0.4); color: #93c5fd; }
+    .btn.blue:hover  { background: rgba(79,142,247,0.1); border-color: var(--blue); }
+    .btn.blue.active { border-color: var(--blue); color: var(--blue); background: rgba(79,142,247,0.08); }
+
+    .btn.green { border-color: rgba(34,197,94,0.4); color: #86efac; }
+    .btn.green:hover { background: rgba(34,197,94,0.1); border-color: var(--green); }
+    .btn.green.active { border-color: var(--green); color: var(--green); background: rgba(34,197,94,0.06); }
+
+    /* Log */
+    .log-body {
+      background: #0a0a0f;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      height: 130px;
+      overflow-y: auto;
+      display: flex; flex-direction: column-reverse; gap: 2px;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+    }
+    .le { padding: 1px 4px; border-radius: 3px; }
+    .ls  { color: #60a5fa; }
+    .lr  { color: #4ade80; }
+    .le2 { color: #f87171; }
+    .li  { color: var(--muted); }
+
+    /* Wiring */
+    .wiring { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; }
+    .wp {
+      background: var(--card2); border-radius: 8px;
+      padding: 8px; text-align: center; border: 1px solid var(--border);
+    }
+    .wp-pin { font-size: 17px; font-weight: 600; margin-bottom: 3px; }
+    .wp-lbl { font-size: 10px; color: var(--muted); }
+
+    /* Divider line between two button sections */
+    .section-divider {
+      width: 100%; height: 1px;
+      background: var(--border);
+      margin: 2px 0;
     }
   </style>
 </head>
-
 <body>
 
-  <h1 id="status">Loading...</h1>
-  <button id="connectBtn">Connect to Arduino</button>
-  <br><br>
-  <video id="video" width="640" height="480" autoplay></video>
+  <div class="hdr">
+    <div class="badge"><span class="badge-dot"></span>MediaPipe Face Mesh</div>
+    <h1>HungryBox AI Detector</h1>
+    <p class="sub">Camera detects mouth open/close → sends command to Arduino servo</p>
+  </div>
+
+  <!-- Global status bar -->
+  <div class="status-pill">
+    <div class="dot" id="sDot"></div>
+    <span id="sTxt">Step 1: Start camera &nbsp;|&nbsp; Step 2: Connect Arduino</span>
+  </div>
+
+  <div class="grid">
+
+    <!-- ── LEFT: Camera feed ── -->
+    <div class="card">
+      <span class="card-label">Live camera</span>
+      <div class="cam-wrap">
+        <video id="inputVideo" playsinline autoplay muted></video>
+        <canvas id="outputCanvas"></canvas>
+        <div class="cam-badge">
+          <span class="rec-dot" id="recDot"></span>
+          <span id="fpsLabel">0 FPS</span>
+        </div>
+      </div>
+
+      <!-- Step 1: Start Camera -->
+      <button class="btn blue" id="camBtn" onclick="startCamera()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+        </svg>
+        Step 1 — Start Camera
+      </button>
+
+      <!-- Step 2: Connect Arduino -->
+      <button class="btn green" id="serialBtn" onclick="connectSerial()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10 14l2.5-2.5M14 10l2.5-2.5M5 19l4-4m6-6l4-4"/>
+          <path d="M8.5 5.5A2 2 0 1 1 11 8l-7 7a2 2 0 1 1-2.5-2.5l7-7z"/>
+          <path d="M15.5 12.5A2 2 0 1 1 18 15l-3 3"/>
+        </svg>
+        Step 2 — Connect Arduino
+      </button>
+    </div>
+
+    <!-- ── RIGHT: Detection info ── -->
+    <div class="card">
+      <span class="card-label">Mouth detection</span>
+
+      <!-- Big face state -->
+      <div class="state-block">
+        <div class="state-icon" id="stateIcon">&#128528;</div>
+        <div class="state-word" id="stateWord">Waiting...</div>
+      </div>
+
+      <!-- MAR progress bar -->
+      <div class="mar-wrap">
+        <div class="mar-row">
+          <span>Mouth open ratio (MAR)</span>
+          <span class="mar-val" id="marVal">0.000</span>
+        </div>
+        <div class="mar-bar-bg"><div class="mar-bar" id="marBar"></div></div>
+        <div class="mar-row"><span>0.0</span><span>0.3</span><span>0.6+</span></div>
+      </div>
+
+      <!-- Sensitivity threshold -->
+      <div class="thresh-row">
+        <label>Sensitivity threshold</label>
+        <input type="range" min="5" max="40" value="18" step="1"
+               id="threshSlider" oninput="updateThresh(this.value)"/>
+        <span class="thresh-val" id="threshVal">0.18</span>
+      </div>
+
+      <!-- Note -->
+      <div style="font-size:12px;color:var(--muted);line-height:1.6;padding:8px;background:var(--card2);border-radius:8px;border:1px solid var(--border);">
+        Use Chrome or Edge only. Firefox does not support Web Serial API.
+        Arduino .ino file: servo goes to 45° on OPEN, 0° on CLOSE.
+      </div>
+    </div>
+
+    <!-- ── BOTTOM: Serial log ── -->
+    <div class="card full">
+      <span class="card-label">Serial log</span>
+      <div class="log-body" id="logBody">
+        <div class="le li">— System ready. Start camera first, then connect Arduino —</div>
+      </div>
+    </div>
+
+  </div>
 
   <script>
-    const video = document.getElementById("video");
-    const statusText = document.getElementById("status");
-    const connectBtn = document.getElementById("connectBtn");
+    /* ── App state ── */
+    let serialPort = null;
+    let writer     = null;
+    let camRunning = false;
+    let lastState  = null;      // tracks last sent command to avoid duplicates
+    let threshold  = 0.18;
+    let openCount  = 0;
+    let closeCount = 0;
+    let frameCount = 0;
+    let lastFpsTime = performance.now();
 
-    let port;
-    let writer;
-    let lastState = null; // Prevent repeated sending
+    /* MediaPipe landmark indices used for MAR calculation */
+    const MOUTH_TOP    = 13;   // inner upper lip center
+    const MOUTH_BOTTOM = 14;   // inner lower lip center
+    const MOUTH_LEFT   = 78;   // left mouth corner
+    const MOUTH_RIGHT  = 308;  // right mouth corner
 
-    // ---------- CONNECT TO ARDUINO ----------
-    connectBtn.addEventListener("click", async () => {
-      try {
-        port = await navigator.serial.requestPort();
-        await port.open({ baudRate: 9600 });
+    /* Mouth outline landmark indices for drawing */
+    const MOUTH_OUTLINE = [61,185,40,39,37,0,267,269,270,409,291,375,321,405,314,17,84,181,91,146,61];
 
-        const encoder = new TextEncoderStream();
-        encoder.readable.pipeTo(port.writable);
-        writer = encoder.writable.getWriter();
+    /* ── DOM references ── */
+    const sDot      = document.getElementById('sDot');
+    const sTxt      = document.getElementById('sTxt');
+    const stateIcon = document.getElementById('stateIcon');
+    const stateWord = document.getElementById('stateWord');
+    const marBar    = document.getElementById('marBar');
+    const marVal    = document.getElementById('marVal');
+    const logBody   = document.getElementById('logBody');
+    const recDot    = document.getElementById('recDot');
+    const fpsLabel  = document.getElementById('fpsLabel');
+    const canvas    = document.getElementById('outputCanvas');
+    const ctx       = canvas.getContext('2d');
+    const video     = document.getElementById('inputVideo');
 
-        statusText.innerText = "Connected to Arduino ✅";
-      } catch (err) {
-        alert("Connection failed!");
-        console.error(err);
+    /* ── Logging utility ── */
+    function log(msg, type) {
+      type = type || 'i';
+      const t = new Date().toLocaleTimeString('en', { hour12: false });
+      const d = document.createElement('div');
+      d.className = 'le l' + type;
+      d.textContent = '[' + t + '] ' + msg;
+      logBody.prepend(d);
+      if (logBody.children.length > 80) logBody.lastChild.remove();
+    }
+
+    /* ── Status pill update ── */
+    function setStatus(state, msg) {
+      sDot.className = 'dot ' + (state || '');
+      sTxt.textContent = msg;
+    }
+
+    /* ── Threshold slider ── */
+    function updateThresh(v) {
+      threshold = v / 100;
+      document.getElementById('threshVal').textContent = threshold.toFixed(2);
+    }
+
+    /* ── MAR: Mouth Aspect Ratio ──
+       Vertical distance between top and bottom lip
+       divided by horizontal distance between corners.
+       Higher MAR = mouth more open. */
+    function calcMAR(lm) {
+      var top    = lm[MOUTH_TOP];
+      var bottom = lm[MOUTH_BOTTOM];
+      var left   = lm[MOUTH_LEFT];
+      var right  = lm[MOUTH_RIGHT];
+      var vert  = Math.hypot(top.x - bottom.x, top.y - bottom.y);
+      var horiz = Math.hypot(left.x - right.x, left.y - right.y);
+      return horiz > 0 ? vert / horiz : 0;
+    }
+
+    /* ── Draw frame on canvas ── */
+    function drawFrame(landmarks, mar, isOpen, image) {
+      canvas.width  = image.width  || canvas.offsetWidth  || 640;
+      canvas.height = image.height || canvas.offsetHeight || 480;
+      var W = canvas.width;
+      var H = canvas.height;
+
+      /* Mirror the video so it looks natural (selfie view) */
+      ctx.save();
+      ctx.scale(-1, 1);
+      ctx.drawImage(image, -W, 0, W, H);
+      ctx.restore();
+
+      if (!landmarks) return;
+
+      var color = isOpen ? '#4f8ef7' : '#f59e0b';
+
+      /* Draw mouth outline polygon */
+      ctx.beginPath();
+      MOUTH_OUTLINE.forEach(function(i, n) {
+        var p  = landmarks[i];
+        var px = (1 - p.x) * W;   // mirror X for selfie view
+        var py = p.y * H;
+        if (n === 0) ctx.moveTo(px, py);
+        else         ctx.lineTo(px, py);
+      });
+      ctx.closePath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth   = 2.5;
+      ctx.stroke();
+      ctx.fillStyle = isOpen ? 'rgba(79,142,247,0.18)' : 'rgba(245,158,11,0.12)';
+      ctx.fill();
+
+      /* Draw four key landmark dots */
+      [MOUTH_TOP, MOUTH_BOTTOM, MOUTH_LEFT, MOUTH_RIGHT].forEach(function(i) {
+        var p = landmarks[i];
+        ctx.beginPath();
+        ctx.arc((1 - p.x) * W, p.y * H, 4, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+      });
+
+      /* Label at bottom of video */
+      var label = isOpen ? 'MOUTH OPEN' : 'MOUTH CLOSED';
+      ctx.font      = 'bold 15px Inter, sans-serif';
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(8, H - 42, 170, 30);
+      ctx.fillStyle = color;
+      ctx.fillText(label, 18, H - 22);
+
+      /* MAR fill bar at top right */
+      var barFill = Math.min(mar / 0.6, 1) * 120;
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(W - 138, 8, 130, 10);
+      ctx.fillStyle = color;
+      ctx.fillRect(W - 138, 8, barFill, 10);
+    }
+
+    /* ── MediaPipe results callback ── */
+    function onResults(results) {
+      /* FPS counter */
+      frameCount++;
+      var now = performance.now();
+      if (now - lastFpsTime > 1000) {
+        fpsLabel.textContent = Math.round(frameCount * 1000 / (now - lastFpsTime)) + ' FPS';
+        frameCount  = 0;
+        lastFpsTime = now;
       }
-    });
 
-    async function sendToArduino(value) {
-      if (writer && value !== lastState) {
-        await writer.write(value);
-        lastState = value;
-        console.log("Sent:", value+ "\n");
+      var lmList = results.multiFaceLandmarks;
+      document.getElementById('faceCount').textContent = lmList ? lmList.length : 0;
+
+      /* No face detected */
+      if (!lmList || lmList.length === 0) {
+        drawFrame(null, 0, false, results.image);
+        marBar.style.width       = '0%';
+        marVal.textContent       = '0.000';
+        stateIcon.textContent    = '🤔';
+        stateWord.textContent    = 'No face';
+        stateWord.className      = 'state-word';
+        setStatus('', 'No face detected — move closer to the camera');
+        return;
+      }
+
+      /* Use first face */
+      var lm     = lmList[0];
+      var mar    = calcMAR(lm);
+      var isOpen = mar > threshold;
+
+      /* Update MAR bar */
+      var pct = Math.min(mar / 0.6 * 100, 100);
+      marBar.style.width      = pct.toFixed(1) + '%';
+      marBar.style.background = isOpen ? '#4f8ef7' : '#f59e0b';
+      marVal.textContent      = mar.toFixed(3);
+
+      /* Update big state display */
+      if (isOpen) {
+        stateIcon.textContent = '😮';
+        stateWord.textContent = 'OPEN';
+        stateWord.className   = 'state-word open-c';
+      } else {
+        stateIcon.textContent = '😐';
+        stateWord.textContent = 'CLOSED';
+        stateWord.className   = 'state-word close-c';
+      }
+
+      drawFrame(lm, mar, isOpen, results.image);
+
+      /* Send command to Arduino only when state changes (avoids spamming serial) */
+      var newState = isOpen ? 'OPEN' : 'CLOSE';
+      if (newState !== lastState) {
+        lastState = newState;
+        if (isOpen) {
+          openCount++;
+          document.getElementById('openCount').textContent = openCount;
+          setStatus('open', 'Mouth OPEN detected — sending OPEN to Arduino (servo → 45°)');
+        } else {
+          closeCount++;
+          document.getElementById('closeCount').textContent = closeCount;
+          setStatus('warn', 'Mouth CLOSED detected — sending CLOSE to Arduino (servo → 0°)');
+        }
+        sendToArduino(newState);
       }
     }
 
-    // ---------- MEDIAPIPE ----------
-    const faceMesh = new FaceMesh({
-      locateFile: (file) =>
-        `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
-    });
+    /* ── Start camera + MediaPipe ── */
+    async function startCamera() {
+      if (camRunning) return;
+      var camBtn = document.getElementById('camBtn');
+      camBtn.disabled = true;
+      camBtn.textContent = 'Starting camera...';
 
-    faceMesh.setOptions({
-      maxNumFaces: 1,
-      refineLandmarks: true,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5
-    });
+      try {
+        /* Initialize MediaPipe Face Mesh */
+        var faceMesh = new FaceMesh({
+          locateFile: function(f) {
+            return 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/' + f;
+          }
+        });
+        faceMesh.setOptions({
+          maxNumFaces: 1,
+          refineLandmarks: true,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5
+        });
+        faceMesh.onResults(onResults);
 
-    faceMesh.onResults(async (results) => {
-      if (!results.multiFaceLandmarks) return;
+        /* Get webcam stream */
+        var stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480, facingMode: 'user' }
+        });
+        video.srcObject = stream;
+        await video.play();
 
-      const landmarks = results.multiFaceLandmarks[0];
+        /* Start MediaPipe camera loop */
+        var cam = new Camera(video, {
+          onFrame: async function() { await faceMesh.send({ image: video }); },
+          width: 640, height: 480
+        });
+        cam.start();
 
-      const upperLip = landmarks[13];
-      const lowerLip = landmarks[14];
+        camRunning = true;
+        recDot.style.background = '#22c55e';
+        camBtn.textContent = '✓ Camera running';
+        log('Camera started — MediaPipe Face Mesh active', 'r');
+        setStatus('ok', 'Camera running — now connect Arduino with Step 2 button');
 
-      const lipDistance = Math.abs(upperLip.y - lowerLip.y);
-
-      if (lipDistance > 0.015) {
-        statusText.innerText = "MOUTH OPEN 😮";
-        await sendToArduino("1");
-      } else {
-        statusText.innerText = "MOUTH CLOSED 🙂";
-        await sendToArduino("0");
+      } catch(e) {
+        camBtn.disabled = false;
+        camBtn.textContent = 'Step 1 — Start Camera';
+        log('Camera error: ' + e.message, 'e2');
+        setStatus('err', 'Camera failed: ' + e.message);
       }
+    }
+
+    /* ── Connect Arduino via Web Serial API ── */
+    async function connectSerial() {
+      if (!('serial' in navigator)) {
+        log('Web Serial API not available — use Chrome or Edge browser!', 'e2');
+        setStatus('err', 'Web Serial not supported — open in Chrome or Edge');
+        return;
+      }
+
+      var serialBtn = document.getElementById('serialBtn');
+      serialBtn.disabled = true;
+      serialBtn.textContent = 'Connecting...';
+
+      try {
+        /* Ask user to pick the COM port (Arduino Uno) */
+        serialPort = await navigator.serial.requestPort();
+        await serialPort.open({ baudRate: 9600 });
+
+        /* Get writer stream for sending commands */
+        writer = serialPort.writable.getWriter();
+
+        serialBtn.textContent = '✓ Arduino connected';
+        serialBtn.classList.add('active');
+        log('Arduino connected — baud rate 9600', 'r');
+        setStatus('ok', 'Arduino connected! Open your mouth to move the servo.');
+
+        /* Start reading responses from Arduino */
+        readFromArduino();
+
+      } catch(e) {
+        serialBtn.disabled = false;
+        serialBtn.textContent = 'Step 2 — Connect Arduino';
+        log('Arduino connect failed: ' + e.message, 'e2');
+        setStatus('err', 'Arduino not connected: ' + e.message);
+      }
+    }
+
+    /* ── Read incoming data from Arduino ── */
+    async function readFromArduino() {
+      var decoder = new TextDecoderStream();
+      serialPort.readable.pipeTo(decoder.writable);
+      var reader = decoder.readable.getReader();
+      var buf = '';
+      try {
+        while (true) {
+          var result = await reader.read();
+          if (result.done) break;
+          buf += result.value;
+          var lines = buf.split('\n');
+          buf = lines.pop();
+          lines.forEach(function(line) {
+            if (line.trim()) log('<- ' + line.trim(), 'r');
+          });
+        }
+      } catch(e) {
+        log('Serial read error: ' + e.message, 'e2');
+      }
+      reader.releaseLock();
+    }
+
+    /* ── Send command string to Arduino ── */
+    async function sendToArduino(cmd) {
+      if (!writer) {
+        log('Arduino not connected — command skipped: ' + cmd, 'i');
+        return;
+      }
+      try {
+        var data = new TextEncoder().encode(cmd + '\n');
+        await writer.write(data);
+        log('-> ' + cmd, 's');
+      } catch(e) {
+        log('Send error: ' + e.message, 'e2');
+      }
+    }
+
+    /* ── Canvas placeholder on load ── */
+    window.addEventListener('load', function() {
+      canvas.width  = 640;
+      canvas.height = 480;
+      ctx.fillStyle = '#0a0a0f';
+      ctx.fillRect(0, 0, 640, 480);
+      ctx.fillStyle = '#2a2a38';
+      ctx.font      = '15px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Press "Step 1 — Start Camera" to begin', 320, 240);
     });
 
-    const camera = new Camera(video, {
-      onFrame: async () => {
-        await faceMesh.send({ image: video });
-      },
-      width: 640,
-      height: 480
-    });
-
-    camera.start();
+    /* Warn if Web Serial is not available */
+    if (!('serial' in navigator)) {
+      log('Web Serial API not found — please open this file in Chrome or Edge', 'e2');
+    }
   </script>
-
 </body>
 </html>

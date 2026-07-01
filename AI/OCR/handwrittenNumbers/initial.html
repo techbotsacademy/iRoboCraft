@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Handwritten Digits</title>
+
+<style>
+
+body{
+    font-family:Arial,Helvetica,sans-serif;
+    background:#f4f6f8;
+    margin:30px;
+}
+
+h1{
+    text-align:center;
+}
+
+button{
+    padding:10px 18px;
+    margin:8px;
+    font-size:16px;
+    cursor:pointer;
+}
+
+#drawingSection{
+    display:none;
+    margin-top:25px;
+}
+
+.pipeline{
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    gap:15px;
+    margin-top:25px;
+    flex-wrap:wrap;
+}
+
+.panel{
+    height:350px;
+    width:350px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+}
+
+.arrow{
+    font-size:42px;
+    margin-top:120px;
+    color:#666;
+}
+
+canvas{
+    border:2px solid #333;
+    border-radius:5px;
+    touch-action:none;
+}
+
+#matrix{
+
+    width:288px;
+    height:240px;
+
+    border:2px solid #333;
+
+    background:white;
+
+    display:flex;
+    justify-content:center;
+    align-items:center;
+
+    overflow:hidden;
+
+    font-family:Consolas, monospace;
+    font-size:7px;
+    line-height:8px;
+    white-space:pre;
+}
+.controls{
+    margin-top:15px;
+}
+
+</style>
+</head>
+
+<body>
+
+<h1>Handwritten Digits</h1>
+
+<center>
+<button id="addBtn">Add Sample</button>
+</center>
+
+<div id="drawingSection">
+
+<div class="pipeline">
+
+<div class="panel">
+<h3>Colored Drawing</h3>
+
+<!-- 3 inches × 2.5 inches -->
+<canvas id="drawCanvas"
+width="288"
+height="240">
+</canvas>
+
+<div class="controls">
+<button id="clearBtn">Clear</button>
+<button id="recognizeBtn">Recognize</button>
+</div>
+
+</div>
+
+<div class="arrow">➜</div>
+
+<div class="panel">
+<h3>Black & White Image</h3>
+
+<canvas id="bwCanvas"
+width="288"
+height="240">
+</canvas>
+
+</div>
+
+<div class="arrow">➜</div>
+
+<div class="panel">
+<h3>0 / 1 Pixel Matrix</h3>
+
+<div id="matrix"></div>
+
+</div>
+
+</div>
+
+</div>
+
+<script>
+
+const addBtn=document.getElementById("addBtn");
+const section=document.getElementById("drawingSection");
+
+addBtn.onclick=()=>{
+    section.style.display="block";
+};
+
+const canvas=document.getElementById("drawCanvas");
+const ctx=canvas.getContext("2d");
+
+ctx.fillStyle="white";
+ctx.fillRect(0,0,canvas.width,canvas.height);
+
+ctx.lineWidth=12;
+ctx.lineCap="round";
+
+let drawing=false;
+
+function getPos(e){
+
+    const rect=canvas.getBoundingClientRect();
+
+    if(e.touches){
+        return{
+            x:e.touches[0].clientX-rect.left,
+            y:e.touches[0].clientY-rect.top
+        };
+    }
+
+    return{
+        x:e.clientX-rect.left,
+        y:e.clientY-rect.top
+    };
+}
+
+function start(e){
+
+    drawing=true;
+
+    const p=getPos(e);
+
+    ctx.beginPath();
+    ctx.moveTo(p.x,p.y);
+}
+
+function draw(e){
+
+    if(!drawing) return;
+
+    e.preventDefault();
+
+    const p=getPos(e);
+
+    ctx.strokeStyle="red";     // can be changed to any color
+    ctx.lineTo(p.x,p.y);
+    ctx.stroke();
+
+    updateBW();
+}
+
+function stop(){
+    drawing=false;
+}
+
+canvas.addEventListener("mousedown",start);
+canvas.addEventListener("mousemove",draw);
+canvas.addEventListener("mouseup",stop);
+canvas.addEventListener("mouseleave",stop);
+
+canvas.addEventListener("touchstart",start);
+canvas.addEventListener("touchmove",draw);
+canvas.addEventListener("touchend",stop);
+
+const bwCanvas=document.getElementById("bwCanvas");
+const bwCtx=bwCanvas.getContext("2d");
+
+function updateBW() {
+
+    // Copy drawing to the B/W canvas
+    bwCtx.clearRect(0, 0, bwCanvas.width, bwCanvas.height);
+    bwCtx.drawImage(canvas, 0, 0);
+
+    let img = bwCtx.getImageData(0, 0, bwCanvas.width, bwCanvas.height);
+    let data = img.data;
+
+    // Convert EVERY pixel to black or white
+    for (let i = 0; i < data.length; i += 4) {
+
+        let gray = (data[i] + data[i + 1] + data[i + 2]) / 3;
+
+        let value = gray < 180 ? 0 : 255;
+
+        data[i] = value;
+        data[i + 1] = value;
+        data[i + 2] = value;
+    }
+
+    bwCtx.putImageData(img, 0, 0);
+
+    // Create the binary matrix from the B/W image
+    let matrix = "";
+
+    let cellWidth = 4;
+    let cellHeight = 4;
+
+    for (let y = 0; y < bwCanvas.height; y += cellHeight) {
+
+        for (let x = 0; x < bwCanvas.width; x += cellWidth) {
+
+            let index = (y * bwCanvas.width + x) * 4;
+
+            let bit = data[index] === 0 ? 0 : 1;
+
+            matrix += bit + " ";
+        }
+
+        matrix += "\n";
+    }
+
+    document.getElementById("matrix").textContent = matrix;
+}
+
+document.getElementById("clearBtn").onclick=()=>{
+
+    ctx.fillStyle="white";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    bwCtx.fillStyle="white";
+    bwCtx.fillRect(0,0,bwCanvas.width,bwCanvas.height);
+
+    document.getElementById("matrix").textContent="";
+};
+
+document.getElementById("recognizeBtn").onclick=()=>{
+
+    updateBW();
+
+    alert(
+"Here the binary matrix would normally be resized (e.g., 28×28) and sent to an AI model such as a CNN trained on MNIST for digit recognition."
+);
+
+};
+
+</script>
+
+</body>
+</html>
