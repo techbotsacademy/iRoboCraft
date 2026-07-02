@@ -44,6 +44,7 @@
   .badge { background: linear-gradient(135deg, var(--pink), var(--purple)); padding: 3px 12px; border-radius: 20px; font-weight: 700; }
   .canvas-wrap { display: flex; flex-direction: column; align-items: center; gap: 0.8rem; }
   canvas { display: block; background: #000; border-radius: 10px; cursor: crosshair; touch-action: none; border: 3px solid #333; }
+  #cameraOverlay{background:transparent !important;}
   canvas.drawing { border-color: var(--pink); }
   #testCanvas.drawing { border-color: var(--blue); }
 
@@ -262,35 +263,52 @@ align-items:flex-start;
 <!-- CAMERA -->
 <div>
 
-<div style="position:relative;">
-
-<video
-id="cameraVideo"
-autoplay
-playsinline
-width="420"
-height="320"
+<div id="cameraContainer"
 style="
-background:black;
-border-radius:12px;
-border:3px solid #333;
+position:relative;
+width:420px;
+height:320px;
+margin:auto;
 ">
-</video>
 
-<canvas
-id="cameraOverlay"
-width="420"
-height="320"
-style="
-position:absolute;
-left:0;
-top:0;
-pointer-events:none;
-">
-</canvas>
+    <video
+    id="cameraVideo"
+    autoplay
+    playsinline
+    width="420"
+    height="320"
+    style="
+    position:absolute;
+    left:0;
+    top:0;
+    width:420px;
+    height:320px;
+    object-fit:cover;
+    background:black;
+    border-radius:12px;
+    border:3px solid #333;
+    transform:scaleX(-1);
+    z-index:1;
+    ">
+    </video>
+
+    <canvas
+    id="cameraOverlay"
+    width="420"
+    height="320"
+    style="
+    position:absolute;
+    left:0;
+    top:0;
+    width:420px;
+    height:320px;
+    pointer-events:none;
+    background:transparent;
+    z-index:2;
+    ">
+    </canvas>
 
 </div>
-
 <div class="row" style="margin-top:12px;">
 
 <button class="btn btn-green"
@@ -999,6 +1017,7 @@ async function startCamera(){
 
         const video=document.getElementById("cameraVideo");
 
+        video.srcObject = cameraStream; 
         video.style.transform="scaleX(-1)";
 
         await video.play();
@@ -1280,22 +1299,25 @@ ctx.translate(200,0);
 
 ctx.scale(-1,1);
 
+const sx = video.videoWidth / video.clientWidth;
+const sy = video.videoHeight / video.clientHeight;
+
+const cropX = video.videoWidth - ((GUIDE.x + GUIDE.w) * sx);
+const cropY = GUIDE.y * sy;
+const cropW = GUIDE.w * sx;
+const cropH = GUIDE.h * sy;
+
 ctx.drawImage(
-
     video,
-
-    GUIDE.x,
-    GUIDE.y,
-    GUIDE.w,
-    GUIDE.h,
-
+    cropX,
+    cropY,
+    cropW,
+    cropH,
     0,
     0,
     200,
     200
-
 );
-
 ctx.restore();
     convertToBW();
 }
