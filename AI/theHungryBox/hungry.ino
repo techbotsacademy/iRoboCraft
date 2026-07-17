@@ -15,15 +15,19 @@ void setup()
 
 void loop()
 {
-  if (Serial.available() > 0) {
-    String command = Serial.readStringUntil('\n'); // Read full line
-    int y = command.toInt(); // Convert to number 
+if (Serial.available()) {
+    String command = Serial.readStringUntil('\n');
+
+    int y = command.toInt();
 
     if (y == 1) {
-      myGate.write(openAngle);
-    } 
-    else if (y == 0) {
-      myGate.write(closeAngle);
+        myGate.write(openAngle);
+        Serial.write("open"); // Echo the byte back to HTML
     }
-  }
+    else if (y == 0) {
+        Serial.println("Closing");
+        myGate.write(closeAngle);
+        Serial.write("close"); // Echo the byte back to HTML
+    }
+}
 }

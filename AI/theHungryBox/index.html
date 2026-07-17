@@ -498,7 +498,7 @@
       drawFrame(lm, mar, isOpen, results.image);
 
       /* Send command to Arduino only when state changes (avoids spamming serial) */
-      var newState = isOpen ? 'OPEN' : 'CLOSE';
+      var newState = isOpen ? 1 : 0;
       if (newState !== lastState) {
         lastState = newState;
         if (isOpen) {
@@ -510,7 +510,9 @@
           document.getElementById('closeCount').textContent = closeCount;
           setStatus('warn', 'Mouth CLOSED detected — sending CLOSE to Arduino (servo → 0°)');
         }
+
         sendToArduino(newState);
+        //readFromArduino(serialPort);  // Start reading responses from Arduino
       }
     }
 
@@ -630,12 +632,11 @@
         return;
       }
       try {
-        var data = new TextEncoder().encode(cmd + '\n');
-        await writer.write(data);
-        log('-> ' + cmd, 's');
-      } catch(e) {
-        log('Send error: ' + e.message, 'e2');
-      }
+          const data = new TextEncoder().encode((cmd + "\n"));
+          await writer.write(data);
+        } catch (e) {
+          log('Serial write error: ' + e.message, 'e2');
+        }
     }
 
     /* ── Canvas placeholder on load ── */
