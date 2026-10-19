@@ -2,13 +2,33 @@
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LAN Ping Pong</title>
+
 <style>
-body { background:black; color:white; text-align:center; font-family:Arial; }
-canvas { background:#111; display:block; margin:10px auto; }
-button { padding:8px 16px; margin:5px; font-size:16px; }
+body {
+  background: black;
+  color: white;
+  text-align: center;
+  font-family: Arial;
+}
+
+canvas {
+  background: #111;
+  display: block;
+  margin: 10px auto;
+  max-width: 100%;
+}
+
+button {
+  padding: 8px 16px;
+  margin: 5px;
+  font-size: 16px;
+  cursor: pointer;
+}
 </style>
 </head>
+
 <body>
 
 <h2>LAN Ping Pong</h2>
@@ -19,8 +39,11 @@ button { padding:8px 16px; margin:5px; font-size:16px; }
 </div>
 
 <p id="status">Waiting for players...</p>
+<p id="countdown" style="font-size:24px;font-weight:bold;"></p>
 
 <canvas id="game" width="800" height="400"></canvas>
+
+<button id="restartBtn" style="display:none;">Restart Game</button>
 
 <script>
 const canvas = document.getElementById("game");
@@ -29,62 +52,171 @@ const ctx = canvas.getContext("2d");
 let role = null;
 let state = {};
 let started = false;
+let joining = false;
+
+const joinP1 = document.getElementById("joinP1");
+const joinP2 = document.getElementById("joinP2");
+const statusText = document.getElementById("status");
+const countdownText = document.getElementById("countdown");
+const restartBtn = document.getElementById("restartBtn");
 
 // JOIN BUTTONS
-document.getElementById("joinP1").onclick = () => join("p1");
-document.getElementById("joinP2").onclick = () => join("p2");
+joinP1.onclick = () => join("p1");
+joinP2.onclick = () => join("p2");
 
-async function join(player) {
-  role = player;
-  document.getElementById("joinP1").disabled = true;
-  document.getElementById("joinP2").disabled = true;
-
-  await fetch("/", {
-    method:"POST",
-    body:JSON.stringify({ type:"join", player })
+async function postData(data) {
+  const response = await fetch("/", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(data)
   });
+
+  if (!response.ok) {
+    throw new Error("Server request failed");
+  }
+
+  return response;
 }
 
-// FETCH STATE
+async function join(player) {
+  if (joining || role) return;
+
+  joining = true;
+
+  try {
+    await postData({type: "join", player});
+    role = player;
+
+    joinP1.disabled = true;
+    joinP2.disabled = true;
+
+    statusText.innerText = "Joined as " +
+      (player === "p1" ? "Player 1" : "Player 2");
+  } catch (error) {
+    statusText.innerText = "Could not connect to server.";
+  } finally {
+    joining = false;
+  }
+}
+
+// RESTART BUTTON
+restartBtn.onclick = async () => {
+  restartBtn.disabled = true;
+
+  try {
+    await postData({type: "restart"});
+
+    role = null;
+    started = false;
+    state = {};
+
+    joinP1.disabled = false;
+    joinP2.disabled = false;
+
+    statusText.innerText = "Waiting for players...";
+    countdownText.innerText = "";
+    restartBtn.style.display = "none";
+  } catch (error) {
+    statusText.innerText = "Restart failed. Try again.";
+  } finally {
+    restartBtn.disabled = false;
+  }
+};
+
+// FETCH GAME STATE
 async function fetchState() {
-  state = await (await fetch("/state")).json();
-  started = state.started;
-  if (!started) {
-    document.getElementById("status").innerText = "Waiting for both players...";
-  } else if (!state.running) {
-    document.getElementById("status").innerText = state.winner + " wins! Game Over";
-  } else {
-    document.getElementById("status").innerText = "Game Started!";
+  try {
+    const response = await fetch("/state", {cache: "no-store"});
+    if (!response.ok) throw new Error("State request failed");
+
+    state = await response.json();
+    started = state.started;
+
+    if (!state.p1 || !state.p2) {
+      statusText.innerText = "Waiting for both players...";
+      countdownText.innerText = "";
+    } else if (state.countdown > 0) {
+      statusText.innerText = "Get Ready!";
+      countdownText.innerText =
+        "Game starts in " + state.countdown + "...";
+    } else if (!state.running) {
+      statusText.innerText = state.winner + " wins! Game Over";
+      countdownText.innerText = "";
+    } else if (state.started) {
+      statusText.innerText = "Game Started!";
+      countdownText.innerText = "";
+    }
+
+    restartBtn.style.display =
+      (state.started && !state.running) ? "inline-block" : "none";
+
+    // Enable joining only when the server is waiting for players.
+    if (!state.started && !role) {
+      joinP1.disabled = false;
+      joinP2.disabled = false;
+    } else {
+      joinP1.disabled = true;
+      joinP2.disabled = true;
+    }
+
+  } catch (error) {
+    statusText.innerText = "Connecting to game server...";
   }
 }
 
 // INPUT
-window.addEventListener("keydown", e => {
-  if (!started || !role || !state.running) return;
+window.addEventListener("keydown", async e => {
+  if (!role || !started || !state.running || state.countdown > 0) return;
 
   let dy = 0;
-  if (role === "p1") { if (e.key==="w") dy=-10; if (e.key==="s") dy=10; }
-  if (role === "p2") { if (e.key==="ArrowUp") dy=-10; if (e.key==="ArrowDown") dy=10; }
 
-  if (dy!==0) {
-    fetch("/", { method:"POST", body:JSON.stringify({ type:"move", player:role, dy }) });
+  if (role === "p1") {
+    if (e.key.toLowerCase() === "w") dy = -10;
+    if (e.key.toLowerCase() === "s") dy = 10;
+  }
+
+  if (role === "p2") {
+    if (e.key === "ArrowUp") dy = -10;
+    if (e.key === "ArrowDown") dy = 10;
+  }
+
+  if (dy !== 0) {
+    e.preventDefault();
+
+    try {
+      await postData({type: "move", player: role, dy});
+    } catch (error) {
+      statusText.innerText = "Connection lost.";
+    }
   }
 });
 
-// DRAW
+// DRAW GAME
 function draw() {
-  ctx.clearRect(0,0,800,400);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
   if (!state.p1 && !state.p2) return;
 
-  // paddles
-  ctx.fillStyle="white";
-  ctx.fillRect(10, state.p1y||160, 10, 80);
-  ctx.fillRect(780, state.p2y||160, 10, 80);
+  ctx.fillStyle = "white";
 
-  // ball
-  const b = state.ball || {x:400,y:200};
+  // Player paddles
+  ctx.fillRect(10, state.p1y ?? 160, 10, 80);
+  ctx.fillRect(780, state.p2y ?? 160, 10, 80);
+
+  // Center line
+  ctx.setLineDash([8, 8]);
+  ctx.strokeStyle = "#555";
   ctx.beginPath();
-  ctx.arc(b.x, b.y, 6, 0, Math.PI*2);
+  ctx.moveTo(400, 0);
+  ctx.lineTo(400, 400);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Ball
+  const ball = state.ball || {x: 400, y: 200};
+
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, 6, 0, Math.PI * 2);
   ctx.fill();
 }
 
@@ -92,7 +224,8 @@ function draw() {
 async function loop() {
   await fetchState();
   draw();
-  requestAnimationFrame(loop);
+
+  setTimeout(loop, 50);
 }
 
 loop();
