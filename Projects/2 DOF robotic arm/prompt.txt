@@ -1,0 +1,10 @@
+Create an Arduino program to control a 4-joint robotic arm using four servo motors.
+
+- Base (Pin 3): Turn left and right.
+- Shoulder (Pin 5): Move up and down.
+- Elbow (Pin 7): Bend forward and backward.
+- Claw (Pin 9): Open and close.
+
+First, move all servos to 90 degrees. Then move the base, shoulder and elbow one by one between 60° and 120°, returning to their starting positions. Finally, open the claw to 40° and close it to 90°.
+
+Use the Servo library, for loops and small delays for smooth movement. Repeat the movements continuously. Add simple comments explaining the program.
